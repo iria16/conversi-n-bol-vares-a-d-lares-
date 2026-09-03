@@ -1,0 +1,108 @@
+// ==========================================================================
+// SIGDE - Componente: Input con icono integrado
+// Usado en auth, modales y cualquier formulario con iconos dentro del campo.
+// El color de fondo vive solo en el wrapper. El input, el select y el botón
+// del ojo son transparentes. Chrome/Edge pintan :-webkit-autofill sobre el
+// input (azul #e8f0fe) y eso deja los iconos de otro color: se cubre con
+// un box-shadow inset del mismo color que el wrapper.
+// ==========================================================================
+
+@mixin input-icon-autofill-fill($bg) {
+  -webkit-text-fill-color: $dark;
+  caret-color: $dark;
+  background-color: $bg !important;
+  background-image: none !important;
+  // Cubre el relleno nativo de autofill (no se puede hacer transparente).
+  box-shadow: 0 0 0 1000px $bg inset !important;
+  transition: background-color 99999s ease-out;
+}
+
+.input-icon-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background-color: $input-bg;
+  border-radius: $border-radius;
+  border: 1px solid $input-border-color;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+
+  > i {
+    color: $input-placeholder-color;
+    padding-left: 0.9rem;
+    font-size: 1rem;
+    flex-shrink: 0;
+    background-color: transparent;
+  }
+
+  .form-control,
+  .form-select {
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+
+    &:focus {
+      background-color: transparent;
+      background-image: none;
+      box-shadow: none;
+    }
+
+    &:-webkit-autofill,
+    &:-webkit-autofill:hover,
+    &:-webkit-autofill:focus,
+    &:-webkit-autofill:active {
+      @include input-icon-autofill-fill($input-bg);
+    }
+  }
+
+  &:focus-within {
+    border-color: $primary;
+    background-color: $input-focus-bg;
+
+    .form-control,
+    .form-select {
+      background-color: transparent;
+
+      &:-webkit-autofill,
+      &:-webkit-autofill:hover,
+      &:-webkit-autofill:focus,
+      &:-webkit-autofill:active {
+        @include input-icon-autofill-fill($input-focus-bg);
+      }
+    }
+  }
+
+  .was-validated &:has(.form-control:invalid),
+  &:has(.form-control.is-invalid) {
+    border-color: $danger;
+  }
+
+  .was-validated &:has(.form-control:valid) {
+    border-color: $success;
+  }
+}
+
+.was-validated .input-icon-group:has(.form-control:invalid) ~ .invalid-feedback {
+  display: block;
+}
+
+.input-icon-group__toggle {
+  background-color: transparent;
+  border: none;
+  color: $input-placeholder-color;
+  padding: 0 0.9rem;
+  cursor: pointer;
+
+  &:focus,
+  &:hover,
+  &:active {
+    background-color: transparent;
+    outline: none;
+    box-shadow: none;
+  }
+}
+
+input[type='password']::-ms-reveal,
+input[type='password']::-ms-clear {
+  display: none;
+}

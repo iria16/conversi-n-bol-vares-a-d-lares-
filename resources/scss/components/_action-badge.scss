@@ -1,0 +1,47 @@
+// ==========================================================================
+// SIGDE - Componente: Action Badge
+// Badges de tipo de acción para la bitácora de auditoría.
+// Usado por: app/Views/components/action-badge.php
+// ==========================================================================
+
+.action-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.3rem 0.65rem;
+  border-radius: $border-radius-pill;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+
+  &--login {
+    background: rgba($info, 0.12);
+    color: shade-color($info, 5%);
+  }
+
+  &--create {
+    background: rgba($success, 0.12);
+    color: shade-color($success, 5%);
+  }
+
+  &--update {
+    background: rgba($warning, 0.14);
+    color: shade-color($warning, 20%);
+  }
+
+  &--delete {
+    background: rgba($danger, 0.1);
+    color: shade-color($danger, 5%);
+  }
+
+  &--query {
+    background: rgba(#6f42c1, 0.12);
+    color: #6f42c1;
+  }
+
+  &--export {
+    background: rgba($secondary, 0.12);
+    color: shade-color($secondary, 10%);
+  }
+}

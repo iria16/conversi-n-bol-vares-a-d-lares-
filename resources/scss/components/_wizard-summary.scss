@@ -1,0 +1,163 @@
+/* ══════════════════════════════════════════════════════════════════
+   Wizard Summary — Paso 6 "Confirmar"
+   Pégalo en tu hoja de estilos principal (o en un archivo aparte
+   que ya estés importando en la vista del wizard).
+   ══════════════════════════════════════════════════════════════════ */
+
+.wizard-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* Fila de 2 secciones lado a lado (Contacto/Dirección, Laboral/Academia) */
+.wizard-summary__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+@media (max-width: 640px) {
+  .wizard-summary__row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Cada bloque temático (título + tarjeta) */
+.wizard-summary__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.wizard-summary__section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.wizard-summary__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.5rem;
+  background: rgba(13, 110, 253, 0.1);
+  color: #0d6efd;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+.wizard-summary__section-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #1f2937;
+}
+
+/* La tarjeta contenedora */
+.wizard-summary__card {
+  background: #f8f9fb;
+  border: 1px solid #e9ecef;
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+}
+
+/* Grid interno de datos: 2 columnas por defecto */
+.wizard-summary__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem 1.5rem;
+}
+
+.wizard-summary__grid--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 576px) {
+  .wizard-summary__grid,
+  .wizard-summary__grid--3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.wizard-summary__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.wizard-summary__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8a94a6;
+}
+
+.wizard-summary__value {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1f2937;
+  word-break: break-word;
+}
+
+/* Formación académica: lista de títulos dentro de la tarjeta */
+.wizard-summary__titulos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.wizard-summary__titulo-item {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem 1.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px dashed #dee2e6;
+}
+
+.wizard-summary__titulo-item:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+@media (max-width: 576px) {
+  .wizard-summary__titulo-item {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Alerta de verificación */
+.info-alert {
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-radius: 0.75rem;
+  align-items: flex-start;
+}
+
+.info-alert--warning {
+  background: rgba(255, 193, 7, 0.12);
+  border: 1px solid rgba(255, 193, 7, 0.35);
+}
+
+.info-alert__icon {
+  font-size: 1.1rem;
+  color: #b8860b;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.info-alert__title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #1f2937;
+  margin-bottom: 0.15rem;
+}
+
+.info-alert__text {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin: 0;
+}

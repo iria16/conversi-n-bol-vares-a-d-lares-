@@ -1,0 +1,34 @@
+// ==========================================================================
+// SIGDE - Layout: App Footer
+// Pie de página del portal administrativo.
+// Usado por: app/Views/partials/app-footer.php
+// ==========================================================================
+
+.app-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.85rem 1rem;
+  background: $primary;
+  color: rgba(#fff, 0.75);
+  font-size: 0.72rem;
+  text-align: center;
+
+  @include media-breakpoint-up(sm) {
+    flex-direction: row;
+    justify-content: space-between;
+    text-align: left;
+    padding: 0.85rem 1.75rem;
+  }
+
+  @include media-breakpoint-up(xl) {
+    padding: 0.85rem 2.25rem;
+  }
+}
+
+.app-footer__version {
+  font-weight: 600;
+  color: rgba(#fff, 0.55);
+  letter-spacing: 0.04em;
+}

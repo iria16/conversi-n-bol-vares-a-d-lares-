@@ -1,0 +1,101 @@
+// ==========================================================================
+// SIGDE - Componente: Detalle de Usuario
+// Cabecera de perfil + secciones de información + barra de estado.
+// Usado por: app/Views/usuarios/modals/ver-usuario.php
+// ==========================================================================
+
+.user-detail__header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.user-detail__name {
+  font-size: 1.05rem;
+  font-weight: $font-weight-bold;
+  color: $primary;
+  margin-top: 0.85rem;
+}
+
+.user-detail__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  color: $secondary;
+  margin-top: 0.35rem;
+}
+
+.user-detail__meta-sep {
+  color: $input-placeholder-color;
+}
+
+.detail-section__label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: $primary;
+  margin-bottom: 1rem;
+
+  i {
+    width: 1.4rem;
+    height: 1.4rem;
+    border-radius: 50%;
+    background: rgba($primary, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    flex-shrink: 0;
+  }
+}
+
+.detail-list__item {
+  margin-bottom: 1rem;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.detail-list__value {
+  font-size: 0.9rem;
+  color: $dark;
+  font-weight: 600;
+}
+
+.user-detail__status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  background: $light;
+  border-radius: $border-radius;
+  padding: 0.9rem 1.1rem;
+  margin-top: 0.5rem;
+}
+
+.user-detail__status-value {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  color: $success;
+  font-size: 0.88rem;
+
+  &::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: $success;
+    flex-shrink: 0;
+  }
+}

@@ -1,0 +1,166 @@
+// ==========================================================================
+// SIGDE - Layout: Sidebar
+// Navegación lateral del portal administrativo.
+// Usado por: app/Views/partials/sidebar.php
+// ==========================================================================
+
+// .sidebar vive dentro de .app-shell__sidebar que es position:fixed con
+// top:0/bottom:0, lo que le da una altura real de 100vh al padre.
+// Con height:100% + flex-direction:column el footer de "Cerrar sesión"
+// SIEMPRE queda anclado al fondo, sin importar cuántos ítems haya.
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #fff;
+  border-right: 1px solid rgba($primary, 0.06);
+  box-shadow: $box-shadow-sm;
+}
+
+// ---------- Brand ----------
+.sidebar__brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 1.25rem 1.25rem 1rem;
+  border-bottom: 1px solid rgba($primary, 0.06);
+  flex-shrink: 0;
+}
+
+.sidebar__logo {
+  width: 44px;
+  height: 44px;
+  border-radius: $border-radius;
+  object-fit: contain;
+  flex-shrink: 0;
+  background: rgba($primary, 0.04);
+  padding: 0.25rem;
+}
+
+.sidebar__brand-text {
+  min-width: 0;
+  text-align: center;
+}
+
+.sidebar__brand-name {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: $primary;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  margin-bottom: 0.35rem;
+}
+
+.sidebar__brand-sub {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: $secondary;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  line-height: 1.3;
+}
+
+// ---------- Nav ----------
+// flex:1 + min-height:0 hace que el nav ocupe el espacio sobrante y
+// haga scroll interno cuando los ítems no caben. min-height:0 es el
+// fix imprescindible en Firefox (sin él flex ignora overflow-y).
+.sidebar__nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.75rem 0.85rem 0.5rem;
+
+  &::-webkit-scrollbar { width: 3px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb {
+    background: rgba($primary, 0.1);
+    border-radius: $border-radius-pill;
+  }
+}
+
+.sidebar__section {
+  margin-bottom: 1.25rem;
+
+  &:last-child { margin-bottom: 0; }
+}
+
+.sidebar__section-label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: tint-color($secondary, 20%);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding: 0 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.sidebar__link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: $border-radius;
+  color: shade-color($secondary, 10%);
+  font-size: 0.88rem;
+  font-weight: 500;
+  text-decoration: none;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+
+  i {
+    font-size: 1.05rem;
+    width: 1.25rem;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  &:hover,
+  &:focus {
+    background: rgba($primary, 0.04);
+    color: $primary;
+  }
+
+  &.is-active {
+    background: rgba($info, 0.08);
+    color: $primary;
+    font-weight: 600;
+    border-left-color: transparent;
+    border-right-color: $success;
+  }
+}
+
+// ---------- Footer / Cerrar sesión ----------
+// flex-shrink:0 impide que el footer se comprima.
+// Queda físicamente anclado al fondo porque el nav absorbe todo
+// el espacio disponible (flex:1) y el footer solo ocupa lo suyo.
+.sidebar__footer {
+  flex-shrink: 0;
+  padding: 0.75rem 1rem 1rem;
+  border-top: 1px solid rgba($primary, 0.06);
+  background: #fff; // cubre el nav cuando hay scroll para evitar superposición
+}
+
+.sidebar__logout {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  border-radius: $border-radius;
+  color: $danger;
+  font-size: 0.88rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+
+  i { font-size: 1.05rem; flex-shrink: 0; }
+
+  &:hover,
+  &:focus {
+    background: tint-color($danger, 90%);
+    color: shade-color($danger, 10%);
+  }
+}

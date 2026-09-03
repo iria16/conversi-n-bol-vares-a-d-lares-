@@ -1,0 +1,172 @@
+// ==========================================================================
+// SIGDE - Componente: Student Record (Ficha del Estudiante)
+// Encabezado, tabs y línea de tiempo para la vista de expediente individual.
+// Reutiliza el mismo gradiente de marca que .auth-split__brand.
+// Usado por: app/Views/estudiantes/ficha.php
+// ==========================================================================
+
+// ---------- Encabezado del expediente ----------
+.record-header {
+  background: linear-gradient(165deg, shade-color($primary, 35%) 0%, $primary 100%);
+  border-radius: $border-radius-xl;
+  padding: 1.75rem 2rem;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+
+  // Los status-badge dentro del header oscuro necesitan más contraste
+  // que su versión tenue por defecto (pensada para fondos claros).
+  .status-badge {
+    &--active {
+      background: rgba($success, 0.25);
+      color: #fff;
+
+      &::before {
+        background: #fff;
+      }
+    }
+
+    &--inactive {
+      background: rgba($danger, 0.25);
+      color: #fff;
+
+      &::before {
+        background: #fff;
+      }
+    }
+  }
+}
+
+.record-header__profile {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.record-header__photo {
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: $border-radius-lg;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+
+  img,
+  .avatar {
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+  }
+}
+
+.record-header__name {
+  font-size: 1.35rem;
+  font-weight: $font-weight-bold;
+  margin-bottom: 0.35rem;
+}
+
+.record-header__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.75);
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+}
+
+.record-header__actions {
+  flex-shrink: 0;
+}
+
+// ---------- Tabs del expediente ----------
+.record-tabs {
+  border-bottom: 1px solid rgba($primary, 0.08);
+  margin-bottom: 1.5rem;
+
+  .nav-link {
+    color: $secondary;
+    font-weight: 600;
+    font-size: 0.88rem;
+    border: none;
+    padding: 0.75rem 0.25rem;
+    margin-right: 1.75rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: transparent;
+
+    &.active {
+      color: $primary;
+      border-bottom: 2px solid $primary;
+    }
+
+    &:hover:not(.active) {
+      color: $primary;
+    }
+  }
+}
+
+// ---------- Historial académico (timeline) ----------
+.timeline {
+  position: relative;
+  padding-left: 1.5rem;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0.3rem;
+    top: 0.3rem;
+    bottom: 0.3rem;
+    width: 2px;
+    background: rgba($primary, 0.08);
+  }
+}
+
+.timeline__item {
+  position: relative;
+  padding-bottom: 1.5rem;
+
+  &:last-child {
+    padding-bottom: 0;
+  }
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: -1.5rem;
+    top: 0.25rem;
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+    background: $secondary;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 2px rgba($secondary, 0.15);
+  }
+
+  &--current::before {
+    background: $primary;
+    box-shadow: 0 0 0 2px rgba($primary, 0.15);
+  }
+}
+
+.timeline__period {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: $primary;
+}
+
+.timeline__meta {
+  font-size: 0.76rem;
+  color: $secondary;
+  margin-top: 0.15rem;
+}

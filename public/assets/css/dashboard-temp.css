@@ -1,0 +1,19 @@
+/* CSS temporal para dashboard - forzar cambios sin recompilar */
+
+/* Verificar que se está cargando este CSS */
+.dashboard-shell {
+  border: 2px solid red !important; /* Solo para test */
+}
+
+/* Remover centrado vertical de Accesos al sistema y Cola de recuperación */
+.dashboard-grid--charts .dashboard-card:first-child,
+.dashboard-grid--feed .dashboard-card:last-child {
+  justify-content: flex-start !important;
+}
+
+/* Asegurar que las tarjetas sean visibles */
+.dashboard-card {
+  background: white !important;
+  border-radius: 0.5rem !important;
+  box-shadow: 0 4px 12px rgba(10, 20, 64, 0.06) !important;
+}

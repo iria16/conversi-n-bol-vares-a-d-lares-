@@ -1,0 +1,65 @@
+// ==========================================================================
+// SIGDE - Componente: Status Badge
+// Badges de estado reutilizables (activo, inactivo, pendiente, etc.).
+// Usado por: app/Views/components/status-badge.php
+// ==========================================================================
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.3rem 0.65rem;
+  border-radius: $border-radius-pill;
+  white-space: nowrap;
+
+  &::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  &--active {
+    background: rgba($success, 0.12);
+    color: shade-color($success, 5%);
+
+    &::before {
+      background: $success;
+    }
+  }
+
+  &--inactive {
+    background: rgba($danger, 0.1);
+    color: shade-color($danger, 5%);
+
+    &::before {
+      background: $danger;
+    }
+  }
+
+  &--pending {
+    background: rgba($warning, 0.14);
+    color: shade-color($warning, 20%);
+
+    &::before {
+      background: $warning;
+    }
+  }
+
+  &--info {
+    background: rgba($info, 0.12);
+    color: shade-color($info, 5%);
+
+    &::before {
+      background: $info;
+    }
+  }
+  
+  // Variante para etiquetas de rol: misma píldora, sin punto indicador
+&--role::before {
+  display: none;
+}
+}

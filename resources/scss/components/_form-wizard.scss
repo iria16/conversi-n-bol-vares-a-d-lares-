@@ -1,0 +1,334 @@
+// ==========================================================================
+// SIGDE - Componente: Form Wizard
+// Stepper + piezas del modal multi-paso "Registrar Nuevo Empleado".
+// Usado por: app/Views/staff/employee-modal.php y app/Views/staff/employee-steps/*
+// Se apoya en .app-modal (_modal.scss), .form-section__label y .info-alert
+// ya existentes: aquí solo va lo que no tiene equivalente en el sistema.
+// ==========================================================================
+
+// ---------- Stepper (indicador de pasos) ----------
+.wizard-steps {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem 1rem;
+  background: rgba($light, 0.6);
+  border-bottom: 1px solid rgba($primary, 0.06);
+}
+
+.wizard-steps__step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 1;
+  position: relative;
+
+  &:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 0.9rem;
+    left: 55%;
+    width: 90%;
+    height: 2px;
+    background: rgba($primary, 0.1);
+    z-index: 0;
+  }
+
+  &.is-completed:not(:last-child)::after {
+    background: $primary;
+  }
+}
+
+.wizard-steps__circle {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: rgba($primary, 0.08);
+  color: $secondary;
+  position: relative;
+  z-index: 1;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.wizard-steps__label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: $secondary;
+  text-align: center;
+}
+
+.wizard-steps__step.is-active {
+  .wizard-steps__circle {
+    background: $primary;
+    color: #fff;
+  }
+
+  .wizard-steps__label {
+    color: $primary;
+  }
+}
+
+.wizard-steps__step.is-completed {
+  .wizard-steps__circle {
+    background: $primary;
+    color: #fff;
+
+    i {
+      font-size: 0.85rem;
+    }
+  }
+}
+
+// ---------- Panel de cada paso ----------
+.wizard-panel {
+  display: none;
+
+  &.is-active {
+    display: block;
+  }
+}
+
+// ---------- Upload de foto de perfil ----------
+.wizard-photo-upload {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1.5rem;
+  border: 1.5px dashed rgba($primary, 0.18);
+  border-radius: $border-radius-lg;
+  background: rgba($light, 0.5);
+}
+
+.wizard-photo-upload__circle {
+  position: relative;
+  width: 5.5rem;
+  height: 5.5rem;
+}
+
+.wizard-photo-upload__preview {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid rgba($primary, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: $input-placeholder-color;
+  font-size: 1.6rem;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.wizard-photo-upload__edit {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: $primary;
+  color: #fff;
+  border: 2px solid #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  cursor: pointer;
+
+  &:hover {
+    background: shade-color($primary, 10%);
+  }
+}
+
+.wizard-photo-upload__hint {
+  font-size: 0.78rem;
+  color: $secondary;
+}
+
+// ---------- Tarjetas seleccionables (ej. Sexo) ----------
+.selectable-card-group {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+.selectable-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.1rem;
+  border: 1.5px solid rgba($primary, 0.1);
+  border-radius: $border-radius-lg;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+
+  input[type='radio'] {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    margin: 0;
+  }
+
+  i {
+    font-size: 1.4rem;
+    color: $secondary;
+  }
+
+  span {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: $dark;
+  }
+
+  &:hover {
+    border-color: rgba($primary, 0.3);
+  }
+
+  &.is-selected {
+    border-color: $primary;
+    background: rgba($primary, 0.03);
+
+    i,
+    span {
+      color: $primary;
+    }
+  }
+}
+
+// ---------- Tabla de títulos académicos (paso 5) ----------
+.wizard-titulos-table {
+  width: 100%;
+  font-size: 0.85rem;
+
+  thead th {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: $secondary;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.6rem 0.5rem;
+    border-bottom: 1px solid rgba($primary, 0.08);
+  }
+
+  tbody td {
+    padding: 0.65rem 0.5rem;
+    border-bottom: 1px solid rgba($primary, 0.04);
+    vertical-align: middle;
+  }
+}
+
+// ---------- Resumen de confirmación (paso 6) ----------
+.wizard-summary__section {
+  margin-bottom: 1.25rem;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.wizard-summary__section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.wizard-summary__icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: rgba($primary, 0.08);
+  color: $primary;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  flex-shrink: 0;
+}
+
+.wizard-summary__section-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: $primary;
+  flex: 1;
+}
+
+.wizard-summary__edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: $primary;
+  background: transparent;
+  border: 1px solid rgba($primary, 0.2);
+  border-radius: $border-radius;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+
+  i { font-size: 0.7rem; }
+
+  &:hover {
+    background: rgba($primary, 0.06);
+    border-color: rgba($primary, 0.4);
+  }
+}
+
+.wizard-summary__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.85rem 1.25rem;
+}
+
+.wizard-summary__item {
+  min-width: 0;
+}
+
+.wizard-summary__label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: $secondary;
+  margin-bottom: 0.2rem;
+}
+
+.wizard-summary__value {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: $dark;
+  overflow-wrap: break-word;
+}
+
+// ---------- Modales anidados (wizard -> modal título/institución) ----------
+// Cuando el wizard tiene un .app-modal hijo abierto encima, el backdrop
+// y el modal secundario se apilan correctamente.
+body.modal-open .modal-backdrop:nth-of-type(2) {
+  z-index: 1056;
+}
+
+.modal.show + .modal.show {
+  z-index: 1060;
+}

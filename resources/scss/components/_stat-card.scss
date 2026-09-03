@@ -1,0 +1,174 @@
+// ==========================================================================
+// SIGDE - Componente: Stat Card
+// Tarjetas de métricas para dashboards y resúmenes.
+// Usado por: app/Views/components/stat-card.php
+// ==========================================================================
+
+.stat-card {
+  background: #fff;
+  border: none;
+  border-radius: $border-radius-xl;
+  box-shadow: $box-shadow-sm;
+  padding: 1.25rem 1.35rem;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: $box-shadow;
+    color: inherit;
+  }
+}
+
+.stat-card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.stat-card__icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: $border-radius-lg;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+
+  &--primary {
+    background: rgba($primary, 0.08);
+    color: $primary;
+  }
+
+  &--success {
+    background: rgba($success, 0.1);
+    color: $success;
+  }
+
+  &--danger {
+    background: rgba($danger, 0.1);
+    color: $danger;
+  }
+
+  &--info {
+    background: rgba($info, 0.1);
+    color: $info;
+  }
+
+  &--warning {
+    background: rgba($warning, 0.12);
+    color: shade-color($warning, 15%);
+  }
+}
+
+.stat-card__trend {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: $border-radius-pill;
+  white-space: nowrap;
+
+  &--up {
+    background: rgba($success, 0.12);
+    color: $success;
+  }
+
+  &--down {
+    background: rgba($danger, 0.12);
+    color: $danger;
+  }
+
+  &--neutral {
+    background: rgba($secondary, 0.12);
+    color: $secondary;
+  }
+}
+
+.stat-card__label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: $secondary;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.25rem;
+}
+
+.stat-card__value {
+  font-size: clamp(1.5rem, 3vw, 1.85rem);
+  font-weight: $font-weight-bold;
+  color: $primary;
+  line-height: 1.1;
+}
+
+.stat-card__bar {
+  height: 4px;
+  margin-top: 0.9rem;
+  background: rgba($primary, 0.08);
+  border-radius: $border-radius-pill;
+  overflow: hidden;
+
+  span {
+    display: block;
+    height: 100%;
+    background: $primary;
+    border-radius: inherit;
+  }
+}
+
+.stat-card__meta {
+  margin-top: 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: $secondary;
+  letter-spacing: 0.02em;
+}
+
+.stat-card--highlighted {
+  background: $primary;
+  color: #fff;
+
+  .stat-card__label {
+    color: rgba(#fff, 0.75);
+  }
+
+  .stat-card__value {
+    color: #fff;
+  }
+
+  .stat-card__icon--primary {
+    background: rgba(#fff, 0.15);
+    color: #fff;
+  }
+
+  .stat-card__trend--neutral {
+    background: rgba(#fff, 0.15);
+    color: rgba(#fff, 0.85);
+  }
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.5rem 1.5rem rgba($primary, 0.35);
+  }
+}
+
+.stat-card--alert {
+  .stat-card__label {
+    color: $danger;
+  }
+
+  .stat-card__value {
+    color: $danger;
+  }
+
+  .stat-card__bar span {
+    background: $danger;
+  }
+}

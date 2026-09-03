@@ -1,0 +1,202 @@
+// ==========================================================================
+// SIGDE - Componente: Autenticación
+// Usado por: app/Views/auth/login.php, recuperar-acceso.php, cambio-password.php
+// El ocultamiento del panel izquierdo en móvil se resuelve con utilidades
+// de Bootstrap directamente en el HTML (d-none d-lg-flex), no aquí.
+// ==========================================================================
+
+.auth-split__brand {
+  background: linear-gradient(165deg, shade-color($primary, 35%) 0%, $primary 100%);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 3rem 2rem;
+}
+
+.auth-split__logo {
+  width: 160px;
+  height: 160px;
+  border-radius: $border-radius-xl;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: $border-radius;
+  }
+}
+
+.auth-split__brand-name {
+  font-weight: $font-weight-bold;
+  font-size: 1.9rem;
+  letter-spacing: 0.03em;
+  margin-top: 1.25rem;
+}
+
+.auth-split__brand-sub {
+  font-size: 0.75rem;
+  letter-spacing: 0.15em;
+  color: rgba(255, 255, 255, 0.65);
+  text-transform: uppercase;
+  margin-top: 0.15rem;
+}
+
+.auth-split__tagline {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.9rem;
+  max-width: 320px;
+  text-align: center;
+  margin-top: 1rem;
+}
+
+.auth-split__feature {
+  color: rgba(255, 255, 255, 0.85);
+  text-align: center;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.auth-split__feature-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: $border-radius;
+  background: rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  margin: 0 auto 0.4rem;
+}
+
+.auth-split__form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: safe center;
+  height: 100%;
+  overflow-y: auto;
+  padding: 2rem 1rem;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border: none;
+  border-radius: $border-radius-xl;
+  box-shadow: $box-shadow;
+  padding: 2.5rem 2.25rem;
+
+  @include media-breakpoint-down(sm) {
+    padding: 2rem 1.5rem;
+  }
+}
+
+.auth-card__title {
+  font-weight: $font-weight-bold;
+  font-size: 1.4rem;
+  text-align: center;
+  color: $primary;
+}
+
+.auth-card__subtitle {
+  text-align: center;
+  margin-top: 0.35rem;
+  margin-bottom: 2rem;
+}
+
+.auth-footer {
+  color: $input-placeholder-color;
+  font-size: 0.72rem;
+
+  a {
+    color: $input-placeholder-color;
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.68rem;
+
+    &:hover {
+      color: $primary;
+    }
+  }
+}
+
+// ---------- Alerta de credenciales (login) ----------
+// Reutilizable para cualquier mensaje de error de formulario que necesite
+// el ícono circular + texto, no solo login. Oculta por defecto: se
+// muestra vía JS/PHP cuando el backend responda con un error.
+.auth-alert {
+  display: none;
+  align-items: flex-start;
+  gap: 0.75rem;
+  background: tint-color($danger, 88%);
+  border-radius: $border-radius;
+  padding: 0.9rem 1rem;
+  margin-top: 1.5rem;
+
+  &.is-visible {
+    display: flex;
+  }
+}
+
+.auth-alert__icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: $danger;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  margin-top: 0.1rem;
+}
+
+.auth-alert__text {
+  color: shade-color($danger, 15%);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+// ---------- Checklist de requisitos de seguridad ----------
+// Usado por: app/Views/auth/cambio-password.php
+// Se actualiza en vivo vía JS (initPasswordRequirementsChecklist en main.js)
+// agregando/quitando la clase .is-met por cada requisito.
+.password-requirements {
+  margin-bottom: 1.75rem;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: $secondary;
+    font-size: 0.85rem;
+    margin-bottom: 0.4rem;
+    transition: color 0.15s ease;
+
+    i {
+      color: $input-placeholder-color;
+      font-size: 0.9rem;
+    }
+
+    &.is-met {
+      color: $dark;
+
+      i {
+        color: $success;
+      }
+    }
+  }
+}

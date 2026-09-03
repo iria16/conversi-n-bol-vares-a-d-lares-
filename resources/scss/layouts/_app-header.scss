@@ -1,0 +1,333 @@
+// ==========================================================================
+// SIGDE - Layout: App Header
+// Barra superior con breadcrumbs, acciones y perfil de usuario.
+// Usado por: app/Views/partials/app-header.php
+// ==========================================================================
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: $zindex-sticky;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  background: rgba(#fff, 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba($primary, 0.06);
+
+  @include media-breakpoint-up(md) {
+    padding: 0.85rem 1.75rem;
+  }
+
+  @include media-breakpoint-up(xl) {
+    padding: 0.85rem 2.25rem;
+  }
+}
+
+.app-header__left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.app-header__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: none;
+  border-radius: $border-radius;
+  background: rgba($primary, 0.06);
+  color: $primary;
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+
+  &:hover,
+  &:focus {
+    background: rgba($primary, 0.1);
+  }
+
+  @include media-breakpoint-up(lg) {
+    display: none;
+  }
+}
+
+.app-header__breadcrumb {
+  display: none;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: $secondary;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0;
+  white-space: nowrap;
+  flex-shrink: 0;
+  flex-wrap: nowrap;      // evita que los breadcrumb-item salten de línea
+
+  @include media-breakpoint-up(sm) {
+    display: flex;        // flex en vez de block para heredar flex-wrap: nowrap
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+
+    &:hover {
+      color: $primary;
+    }
+  }
+
+  .active {
+    color: shade-color($secondary, 15%);
+  }
+}
+
+.app-header__right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.app-header__notify {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: $secondary;
+  font-size: 1.15rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+
+  &:hover,
+  &:focus {
+    background: rgba($primary, 0.06);
+    color: $primary;
+  }
+}
+
+.app-header__notify-dot {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: $danger;
+  border: 1.5px solid #fff;
+}
+
+.app-header__profile {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.15rem 0 0.15rem 0.75rem;
+  border: none;
+  border-left: 1px solid rgba($primary, 0.08);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: right;
+  border-radius: $border-radius;
+
+  &:hover,
+  &:focus,
+  &:focus-visible {
+    outline: none;
+  }
+}
+
+.app-header__profile-info {
+  display: none;
+  text-align: right;
+
+  @include media-breakpoint-up(md) {
+    display: block;
+  }
+}
+
+.app-header__profile-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: $primary;
+  line-height: 1.2;
+}
+
+.app-header__profile-role {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: $secondary;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+// ---------- Notify dropdown ----------
+// Panel de notificaciones que cuelga del botón de campana.
+.notify-dropdown {
+  width: 340px;
+  padding: 0;
+  border: none;
+  border-radius: $border-radius-xl;
+  box-shadow: 0 16px 48px rgba($primary, 0.14);
+  overflow: hidden;
+
+  @include media-breakpoint-down(sm) {
+    width: calc(100vw - 1.5rem);
+  }
+}
+
+// Cabecera: título + badge de cantidad
+.notify-dropdown__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.15rem 0.75rem;
+  border-bottom: 1px solid rgba($primary, 0.06);
+}
+
+.notify-dropdown__title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: $primary;
+  margin: 0;
+}
+
+.notify-dropdown__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.4rem;
+  border-radius: $border-radius-pill;
+  background: $danger;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+// Lista de ítems con scroll si hay muchos
+.notify-dropdown__list {
+  max-height: 280px;
+  overflow-y: auto;
+
+  &::-webkit-scrollbar { width: 3px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb {
+    background: rgba($primary, 0.1);
+    border-radius: $border-radius-pill;
+  }
+}
+
+// Ítem individual
+.notify-dropdown__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.85rem 1.15rem;
+  text-decoration: none;
+  transition: background-color 0.12s ease;
+  border-bottom: 1px solid rgba($primary, 0.05);
+
+  &:last-child { border-bottom: none; }
+
+  &:hover,
+  &:focus {
+    background: rgba($primary, 0.03);
+    outline: none;
+  }
+}
+
+// Ícono circular por tipo
+.notify-dropdown__icon {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  margin-top: 0.05rem;
+
+  &--warning {
+    background: rgba($warning, 0.14);
+    color: darken($warning, 8%);
+  }
+
+  &--danger {
+    background: rgba($danger, 0.12);
+    color: darken($danger, 6%);
+  }
+
+  &--info {
+    background: rgba($info, 0.12);
+    color: darken($info, 8%);
+  }
+
+  &--success {
+    background: rgba($success, 0.12);
+    color: darken($success, 6%);
+  }
+}
+
+// Texto + timestamp
+.notify-dropdown__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.notify-dropdown__text {
+  font-size: 0.8rem;
+  color: shade-color($dark, 5%);
+  line-height: 1.4;
+  margin: 0 0 0.22rem;
+
+  strong {
+    color: $primary;
+    font-weight: 600;
+  }
+}
+
+.notify-dropdown__time {
+  font-size: 0.68rem;
+  color: $secondary;
+}
+
+// Footer "Ver todas"
+.notify-dropdown__footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: $primary;
+  text-decoration: none;
+  border-top: 1px solid rgba($primary, 0.06);
+  background: rgba($primary, 0.02);
+  transition: background-color 0.12s ease, color 0.12s ease;
+
+  i { font-size: 0.8rem; transition: transform 0.15s ease; }
+
+  &:hover,
+  &:focus {
+    background: rgba($primary, 0.05);
+    color: $info;
+    outline: none;
+
+    i { transform: translateX(3px); }
+  }
+}

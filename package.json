@@ -1,0 +1,24 @@
+{
+  "name": "sidgev1",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+  "sass:build": "sass resources/scss/app.scss public/assets/css/app.css --style=compressed --no-source-map",
+    "sass:watch": "sass --watch resources/scss/app.scss:public/assets/css/app.css",
+    "copy:vendor-js": "mkdir -p public/assets/js/vendor && cp node_modules/bootstrap/dist/js/bootstrap.bundle.min.js public/assets/js/vendor/ && cp node_modules/sweetalert2/dist/sweetalert2.all.min.js public/assets/js/vendor/",
+    "copy:vendor-icons": "mkdir -p public/assets/vendor/bootstrap-icons && cp -r node_modules/bootstrap-icons/font/* public/assets/vendor/bootstrap-icons/",
+    "build": "npm run copy:vendor-js && npm run copy:vendor-icons && npm run sass:build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bootstrap": "^5.3.8",
+    "bootstrap-icons": "^1.13.1",
+    "sweetalert2": "^11.26.25"
+  },
+  "devDependencies": {
+    "sass": "^1.102.0"
+  }
+}

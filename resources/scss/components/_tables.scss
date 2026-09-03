@@ -1,0 +1,10 @@
+// _tables.scss
+.table {
+  table-layout: fixed;
+  min-width: 720px;
+
+  th,
+  td {
+    white-space: nowrap;
+  }
+}

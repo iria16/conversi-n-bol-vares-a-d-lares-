@@ -1,0 +1,226 @@
+// ==========================================================================
+// SIGDE - Componente: Data Panel
+// Contenedor de tablas con filtros, búsqueda y paginación.
+// Usado por: app/Views/components/data-panel.php
+// ==========================================================================
+
+.data-panel {
+  background: #fff;
+  border-radius: $border-radius-xl;
+  box-shadow: $box-shadow-sm;
+  overflow: hidden;
+}
+
+.data-panel__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.15rem;
+  border-bottom: 1px solid rgba($primary, 0.06);
+}
+
+.data-panel__filters {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.data-panel__search {
+  position: relative;
+  min-width: 200px;
+  flex: 1;
+
+  i {
+    position: absolute;
+    left: 0.85rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: $secondary;
+    font-size: 0.95rem;
+    pointer-events: none;
+    z-index: 1;
+  }
+}
+
+.data-panel__filters .form-select {
+  flex: 0 0 auto;   // anula el flex-basis:auto heredado de width:100%
+  width: auto;      // anula el width:100% de Bootstrap
+  min-width: 160px;
+  font-size: 0.85rem;
+}
+
+.data-panel__search .form-control {
+  padding-left: 2.35rem;
+  font-size: 0.85rem;
+}
+
+.data-panel__body {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.data-panel__table {
+  width: 100%;
+  margin-bottom: 0;
+  font-size: 0.88rem;
+
+  thead th {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: $secondary;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+    padding: 0.85rem 1.15rem;
+    border-bottom: 1px solid rgba($primary, 0.06);
+    background: rgba($light, 0.5);
+  }
+
+  tbody td {
+    padding: 0.85rem 1.15rem;
+    vertical-align: middle;
+    border-bottom: 1px solid rgba($primary, 0.04);
+    color: shade-color($dark, 5%);
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  @include media-breakpoint-down(sm) {
+    thead th,
+    tbody td {
+      padding-left: 0.85rem;
+      padding-right: 0.85rem;
+    }
+  }
+
+  tbody tr {
+    transition: background-color 0.15s ease;
+
+    &:hover {
+      background: rgba($primary, 0.02);
+    }
+
+    &.is-muted {
+      opacity: 0.55;
+    }
+  }
+}
+
+.data-panel__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: $border-radius;
+  background: transparent;
+  color: $secondary;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  text-decoration: none;
+
+  &:hover,
+  &:focus {
+    background: rgba($primary, 0.06);
+    color: $primary;
+  }
+
+  &--view:hover,
+  &--view:focus {
+    color: $info;
+    background: rgba($info, 0.08);
+  }
+
+  &--edit:hover,
+  &--edit:focus {
+    color: $primary;
+    background: rgba($primary, 0.08);
+  }
+
+  &--toggle:hover,
+  &--toggle:focus {
+    color: $success;
+    background: rgba($success, 0.1);
+  }
+
+  &--danger:hover,
+  &--danger:focus {
+    color: $danger;
+    background: rgba($danger, 0.08);
+  }
+}
+
+.data-panel__footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.85rem 1.15rem;
+  border-top: 1px solid rgba($primary, 0.06);
+  font-size: 0.82rem;
+  color: $secondary;
+
+  @include media-breakpoint-up(sm) {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+}
+
+.data-panel__pagination {
+  .page-link {
+    border: none;
+    color: $secondary;
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 0.35rem 0.65rem;
+    border-radius: 50% !important;
+    min-width: 2rem;
+    text-align: center;
+    margin: 0 0.1rem;
+
+    &:hover {
+      background: rgba($primary, 0.06);
+      color: $primary;
+    }
+  }
+
+  .page-item.active .page-link {
+    background: $primary;
+    color: #fff;
+  }
+
+  .page-item.disabled .page-link {
+    background: transparent;
+    color: tint-color($secondary, 25%);
+  }
+}
+
+// Form switch dentro de tablas
+.table-switch {
+  .form-check-input {
+    width: 2.25rem;
+    height: 1.15rem;
+    cursor: pointer;
+
+    &:checked {
+      background-color: $success;
+      border-color: $success;
+    }
+
+    &:focus {
+      box-shadow: 0 0 0 0.2rem rgba($success, 0.2);
+    }
+  }
+}

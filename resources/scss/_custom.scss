@@ -1,0 +1,81 @@
+// ==========================================================================
+// SIGDE - Ajustes personalizados
+// Solo para lo que NO se resuelve sobrescribiendo variables de Bootstrap.
+// Antes de agregar algo aquí, confirma que no existe ya una variable o
+// utilidad de Bootstrap que lo resuelva.
+// ==========================================================================
+
+html, body {
+  height: 100%;
+}
+
+.skip-link {
+  position: absolute;
+  left: 1rem;
+  top: -3rem;
+  z-index: $zindex-tooltip;
+  padding: 0.5rem 0.85rem;
+  background: $primary;
+  color: #fff;
+  border-radius: $border-radius;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+
+  &:focus {
+    top: 0.75rem;
+    color: #fff;
+  }
+}
+
+body {
+  background-color: $light;
+  color: $dark;
+}
+
+// Solo las pantallas de auth bloquean el scroll global.
+.auth-split {
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+// Label tipo "USUARIO", "CONTRASEÑA": mayúsculas + tracking amplio.
+// No existe como utilidad nativa de Bootstrap.
+.label-sigde {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: $secondary;
+  margin-bottom: 0.4rem;
+  display: inline-block;
+}
+
+.text-support {
+  color: $secondary;
+  font-size: 0.9rem;
+}
+
+.link-sigde {
+  color: $primary;
+  font-weight: 600;
+  font-size: 0.82rem;
+  text-decoration: none;
+
+  &:hover,
+  &:focus {
+    color: shade-color($primary, 15%);
+    text-decoration: underline;
+  }
+}
+
+// Switches de estado (activar/desactivar): Bootstrap no expone una
+// variable propia para el color de :checked, así que se sobrescribe aquí.
+.form-switch .form-check-input:checked {
+  background-color: $success;
+  border-color: $success;
+}
+
+.form-switch .form-check-input:focus:checked {
+  box-shadow: 0 0 0 0.25rem rgba($success, 0.25);
+}
