@@ -2,10 +2,17 @@
 
 require_once __DIR__ . '/BaseController.php';
 require_once __DIR__ . '/../Models/CatalogoModel.php';
-require_once __DIR__ . '/../Models/SchoolYearModel.php';
 require_once __DIR__ . '/../Models/GradeModel.php';
 require_once __DIR__ . '/../Models/SectionModel.php';
 require_once __DIR__ . '/../Models/ShiftModel.php';
+require_once __DIR__ . '/../Models/AcademicDegreeModel.php';
+require_once __DIR__ . '/../Models/TitleModel.php';
+require_once __DIR__ . '/../Models/InstitutionTypeModel.php';
+require_once __DIR__ . '/../Models/RoleModel.php';
+require_once __DIR__ . '/../Models/ParentescoModel.php';
+require_once __DIR__ . '/../Models/OcupacionModel.php';
+require_once __DIR__ . '/../Models/NivelInstruccionModel.php';
+require_once __DIR__ . '/../Models/MotivoRetiroModel.php';
 
 class CatalogoController extends BaseController
 {
@@ -21,10 +28,17 @@ class CatalogoController extends BaseController
 
     // Registro de tipos de catálogo soportados: clave => [nombre visible, ícono, clase del Model]
     private const TIPOS = [
-        'anioEscolar' => ['nombre' => 'Año Escolar', 'icono' => 'bi-calendar3',     'model' => SchoolYearModel::class],
-        'grado'       => ['nombre' => 'Grado',       'icono' => 'bi-mortarboard',   'model' => GradeModel::class],
-        'seccion'     => ['nombre' => 'Sección',     'icono' => 'bi-diagram-3',     'model' => SectionModel::class],
-        'turno'       => ['nombre' => 'Turno',       'icono' => 'bi-clock-history', 'model' => ShiftModel::class],
+        'grado'           => ['nombre' => 'Grado',           'icono' => 'bi-mortarboard',   'model' => GradeModel::class],
+        'seccion'         => ['nombre' => 'Sección',         'icono' => 'bi-diagram-3',     'model' => SectionModel::class],
+        'turno'           => ['nombre' => 'Turno',           'icono' => 'bi-clock-history', 'model' => ShiftModel::class],
+        'grado_academico' => ['nombre' => 'Grado Académico', 'icono' => 'bi-book',          'model' => AcademicDegreeModel::class],
+        'titulo'          => ['nombre' => 'Título',          'icono' => 'bi-award',         'model' => TitleModel::class],
+        'tipo_institucion' => ['nombre' => 'Tipo de Institución', 'icono' => 'bi-building',      'model' => InstitutionTypeModel::class],
+        'rol'          => ['nombre' => 'Rol',             'icono' => 'bi-person-badge',  'model' => RoleModel::class],
+        'parentesco'    => ['nombre' => 'Parentesco',      'icono' => 'bi-people',        'model' => ParentescoModel::class],
+        'ocupacion'     => ['nombre' => 'Ocupación',       'icono' => 'bi-briefcase',     'model' => OcupacionModel::class],
+        'nivel_instruccion' => ['nombre' => 'Nivel de Instrucción', 'icono' => 'bi-journal-text',  'model' => NivelInstruccionModel::class],
+        'motivo_retiro' => ['nombre' => 'Motivo de Retiro', 'icono' => 'bi-x-circle',      'model' => MotivoRetiroModel::class],
     ];
 
     private string $tipoActivo;

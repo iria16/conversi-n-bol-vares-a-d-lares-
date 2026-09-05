@@ -27,7 +27,8 @@
 
 $pageTitle       = 'Gestión de Inscripciones';
 $pageDescription = 'Supervisa y procesa el ingreso de nuevos estudiantes y ratificaciones anuales para el periodo escolar vigente.';
-$currentNav      = 'inscripciones';
+$currentNav      = 'inscripcion';
+$extraScripts    = ['/js/enrollments.js'];
 
 $breadcrumbs = [
     ['label' => 'Gestión de estudiantes', 'url' => null],
@@ -44,10 +45,10 @@ ob_start();
   </div>
 
   <div class="page-header__actions">
-    <a href="<?= BASE_URL ?>inscripciones/create" class="btn btn-primary">
-      <i class="bi bi-plus-circle"></i>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#nuevaInscripcionModal">
+      <i class="bi bi-person-plus"></i>
       Nueva Inscripción
-    </a>
+    </button>
   </div>
 </div>
 
@@ -98,68 +99,39 @@ ob_start();
 </div>
 
 <!-- ===================== Panel de filtros ===================== -->
-<div class="content-card mb-4">
-  <form method="get" action="<?= BASE_URL ?>inscripciones/index" class="row g-3 align-items-end auto-filters">
-    <div class="col-md-4">
-      <label for="filtroBusqueda" class="label-sigde">Buscar Estudiante</label>
-      <div class="input-icon-group">
-        <i class="bi bi-search"></i>
-        <input
-          type="search"
-          id="filtroBusqueda"
-          name="q"
-          class="form-control"
-          placeholder="Nombre o ID del estudiante..."
-          value="<?= htmlspecialchars($filtros['q'] ?? '') ?>"
-        >
-      </div>
-    </div>
-
-    <div class="col-md-3">
-      <label for="filtroAnio" class="label-sigde">Año Escolar</label>
-      <select id="filtroAnio" name="anio" class="form-select">
+<div class="data-panel">
+  <div class="data-panel__toolbar">
+    <form method="get" action="<?= BASE_URL ?>inscripciones/index" id="filtrosInscripciones" class="data-panel__filters">
+      <select name="anio" class="form-select" aria-label="Filtrar por año escolar">
+        <option value="">Año escolar (Todos)</option>
         <?php foreach ($aniosEscolares as $anio): ?>
           <option value="<?= htmlspecialchars($anio) ?>" <?= ($filtros['anio'] ?? '') === $anio ? 'selected' : '' ?>>
             <?= htmlspecialchars($anio) ?>
           </option>
         <?php endforeach; ?>
       </select>
-    </div>
-
-    <div class="col-md-2">
-      <label for="filtroGrado" class="label-sigde">Grado</label>
-      <select id="filtroGrado" name="grado" class="form-select">
-        <option value="">Todos</option>
+      <select name="grado" class="form-select" aria-label="Filtrar por grado">
+        <option value="">Grado (Todos)</option>
         <?php foreach ($grados as $grado): ?>
           <option value="<?= htmlspecialchars($grado) ?>" <?= ($filtros['grado'] ?? '') === $grado ? 'selected' : '' ?>>
             <?= htmlspecialchars($grado) ?>
           </option>
         <?php endforeach; ?>
       </select>
-    </div>
-
-    <div class="col-md-2">
-      <label for="filtroSeccion" class="label-sigde">Sección</label>
-      <select id="filtroSeccion" name="seccion" class="form-select">
-        <option value="">Todas</option>
+      <select name="seccion" class="form-select" aria-label="Filtrar por sección">
+        <option value="">Sección (Todas)</option>
         <?php foreach ($secciones as $seccion): ?>
           <option value="<?= htmlspecialchars($seccion) ?>" <?= ($filtros['seccion'] ?? '') === $seccion ? 'selected' : '' ?>>
             <?= htmlspecialchars($seccion) ?>
           </option>
         <?php endforeach; ?>
       </select>
-    </div>
-
-    <div class="col-md-1">
-      <button type="submit" class="btn btn-primary w-100" title="Buscar">
+      <div class="data-panel__search">
         <i class="bi bi-search"></i>
-      </button>
-    </div>
-  </form>
-</div>
-
-<!-- ===================== Tabla de inscripciones ===================== -->
-<div class="data-panel">
+        <input type="search" name="q" class="form-control" placeholder="Buscar por nombre o cédula..." value="<?= htmlspecialchars($filtros['q'] ?? '') ?>" autocomplete="off">
+      </div>
+    </form>
+  </div>
 
   <div class="data-panel__body">
     <table class="data-panel__table">
@@ -181,7 +153,7 @@ ob_start();
           <th scope="col" class="text-center">Acción</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody id="tablaInscripcionesBody">
         <?php foreach ($inscripciones as $i): ?>
           <?php $esCompleta = $i['estado'] === 'completa'; ?>
           <tr>
@@ -238,7 +210,7 @@ ob_start();
   </div>
 
   <div class="data-panel__footer">
-    <span>
+    <span id="paginacionInfo">
       Mostrando <?= (int) $paginacion['desde'] ?> a <?= (int) $paginacion['hasta'] ?>
       de <?= number_format((int) $paginacion['total'], 0, ',', '.') ?> inscripciones del mes
     </span>
@@ -250,6 +222,8 @@ ob_start();
   </div>
 
 </div>
+
+<?php include __DIR__ . '/enrollment-modal.php'; ?>
 
 <?php
 $pageContent = ob_get_clean();

@@ -20,6 +20,7 @@ $modalFooter   = $modalFooter ?? '';
 $modalSize     = $modalSize ?? '';
 $modalStatic   = $modalStatic ?? false;
 $modalCentered = $modalCentered ?? true;
+$modalHeaderExtra = $modalHeaderExtra ?? ''; // HTML opcional entre header y body (ej. stepper)
 
 $dialogClass = 'modal-dialog';
 if (in_array($modalSize, ['sm', 'lg', 'xl'], true)) {
@@ -43,6 +44,9 @@ $backdropAttr = $modalStatic ? ' data-bs-backdrop="static" data-bs-keyboard="fal
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
+      <?php if ($modalHeaderExtra !== ''): ?>
+        <?php echo $modalHeaderExtra; ?>
+      <?php endif; ?>
       <div class="modal-body">
         <?php echo $modalBody; ?>
       </div>
@@ -55,5 +59,5 @@ $backdropAttr = $modalStatic ? ' data-bs-backdrop="static" data-bs-keyboard="fal
   </div>
 </div>
 <?php
-unset($modalId, $modalTitle, $modalSubtitle, $modalBody, $modalFooter, $modalSize, $modalStatic, $modalCentered, $dialogClass, $backdropAttr);
+unset($modalId, $modalTitle, $modalSubtitle, $modalBody, $modalFooter, $modalSize, $modalStatic, $modalCentered, $modalHeaderExtra, $dialogClass, $backdropAttr);
 ?>

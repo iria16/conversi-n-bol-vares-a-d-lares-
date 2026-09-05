@@ -10,7 +10,7 @@ $cargos = $cargos ?? [];
     <select class="form-select" id="cargoAsignado" name="id_cargo" required>
       <option value="">Seleccione el cargo...</option>
       <?php foreach ($cargos as $cargo): ?>
-        <option value="<?= (int) $cargo['id_cargo'] ?>"><?= htmlspecialchars($cargo['nombre']) ?></option>
+        <option value="<?= (int) $cargo['id'] ?>"><?= htmlspecialchars($cargo['nombre']) ?></option>
       <?php endforeach; ?>
     </select>
   </div>

@@ -11,8 +11,8 @@ $estados = $estados ?? [];
 
 <div class="row g-3 mb-3">
   <div class="col-md-4">
-    <label class="form-label" for="direccionEstado">Estado</label>
-    <select class="form-select" id="direccionEstado" name="id_estado_ui">
+    <label class="form-label" for="direccionEstado">Estado *</label>
+    <select class="form-select" id="direccionEstado" name="id_estado_ui" required>
       <option value="">Seleccione estado</option>
       <?php foreach ($estados as $estado): ?>
         <option value="<?= (int) $estado['id_estado'] ?>"><?= htmlspecialchars($estado['nombre']) ?></option>
@@ -20,8 +20,8 @@ $estados = $estados ?? [];
     </select>
   </div>
   <div class="col-md-4">
-    <label class="form-label" for="direccionMunicipio">Municipio</label>
-    <select class="form-select" id="direccionMunicipio" name="id_municipio_ui" disabled>
+    <label class="form-label" for="direccionMunicipio">Municipio *</label>
+    <select class="form-select" id="direccionMunicipio" name="id_municipio_ui" disabled required>
       <option value="">Seleccione municipio</option>
     </select>
   </div>

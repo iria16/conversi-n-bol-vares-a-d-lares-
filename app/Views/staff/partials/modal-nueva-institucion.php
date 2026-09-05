@@ -17,12 +17,17 @@
         </div>
         <div class="mb-3">
           <label class="form-label" for="nuevaInstitucionTipo">Tipo de Institución *</label>
-          <select class="form-select" id="nuevaInstitucionTipo">
-            <option value="">Seleccione tipo</option>
-            <?php foreach ($tiposInstitucion ?? [] as $tipo): ?>
-              <option value="<?= (int) $tipo['id'] ?>"><?= htmlspecialchars($tipo['nombre']) ?></option>
-            <?php endforeach; ?>
-          </select>
+          <div class="d-flex gap-2">
+            <select class="form-select" id="nuevaInstitucionTipo">
+              <option value="">Seleccione tipo</option>
+              <?php foreach ($tiposInstitucion ?? [] as $tipo): ?>
+                <option value="<?= (int) $tipo['id'] ?>"><?= htmlspecialchars($tipo['nombre']) ?></option>
+              <?php endforeach; ?>
+            </select>
+            <button type="button" class="btn btn-outline-secondary flex-shrink-0" id="btnAbrirNuevoTipoInstitucion" title="Crear nuevo tipo de institución">
+              <i class="bi bi-plus-lg"></i>
+            </button>
+          </div>
         </div>
       </div>
 

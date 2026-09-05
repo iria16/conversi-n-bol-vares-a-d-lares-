@@ -13,6 +13,25 @@ ob_start();
 <form id="formEditarEmpleado" novalidate>
   <!-- ID oculto del empleado que se está editando -->
   <input type="hidden" id="editEmpleado__id" name="id" value="">
+  <!-- Ruta/base64 de la foto actual, para no perderla si el usuario no cambia nada -->
+  <input type="hidden" id="editEmpleado__fotoActual" name="foto_actual" value="">
+
+  <!-- Avatar / Foto del empleado (misma estructura que el wizard de registro) -->
+  <div class="wizard-photo-upload mb-4">
+    <div class="wizard-photo-upload__circle">
+      <div class="wizard-photo-upload__preview" id="editEmpleado__fotoPreview">
+        <i class="bi bi-person"></i>
+      </div>
+      <label class="wizard-photo-upload__edit" for="editEmpleado__foto">
+        <i class="bi bi-pencil-fill"></i>
+      </label>
+      <input type="file" id="editEmpleado__foto" name="foto" accept="image/*" class="d-none">
+    </div>
+    <span class="wizard-photo-upload__hint">Foto de perfil (Opcional)</span>
+    <button type="button" id="editEmpleado__quitarFoto" class="btn btn-link btn-sm p-0 text-danger d-none mt-1">
+      Quitar foto
+    </button>
+  </div>
 
   <div class="form-section__label">Identificación oficial</div>
   <div class="row g-3">
@@ -72,12 +91,13 @@ ob_start();
   <div class="row g-3">
     <div class="col-md-6">
       <label class="label-sigde" for="editEmpleado__cargo">Cargo</label>
-      <select class="form-select" id="editEmpleado__cargo" name="id_cargo">
+      <select class="form-select" id="editEmpleado__cargo" name="id_cargo" required>
         <option value="">Seleccione...</option>
         <?php foreach ($cargos as $option): ?>
           <option value="<?= (int) $option['id'] ?>"><?= htmlspecialchars($option['nombre']) ?></option>
         <?php endforeach; ?>
       </select>
+      <div class="invalid-feedback">El cargo es obligatorio.</div>
     </div>
     <div class="col-md-6">
       <label class="label-sigde" for="editEmpleado__fechaIngreso">Fecha de ingreso</label>

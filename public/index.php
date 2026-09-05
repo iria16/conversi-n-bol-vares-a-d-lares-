@@ -216,6 +216,10 @@ $rutasPermitidas = [
         'getByIdAjax',
         'municipiosPorEstadoAjax',
         'parroquiasPorMunicipioAjax',
+        'storeTituloAjax',
+        'storeInstitucionAjax',
+        'storeTipoInstitucionAjax',
+        'removePhotoAjax',
     ],
     'bitacora' => [
     'index',
@@ -226,6 +230,15 @@ $rutasPermitidas = [
     'ficha',
     'exportar',
 ],
+    'inscripciones' => [
+        'index',
+        'listAjax',
+        'storeAjax',
+        'create',
+        'store',
+        'ver',
+        'continuar',
+    ],
 ];
 
 // Comprobamos que el controlador y la acción estén en la lista blanca

@@ -3,6 +3,12 @@ document.addEventListener('DOMContentLoaded', function () {
   var route = (window.BASE_URL || '') + 'index.php/staff/';
   var form = document.getElementById('formNuevoEmpleado');
 
+  /* Antepone BASE_URL a una ruta de foto guardada en BD (ej. /uploads/empleados/x.jpg). */
+  function urlFoto(foto) {
+    if (!foto) return '';
+    return (window.BASE_URL || '').replace(/\/$/, '') + foto;
+  }
+
   /* ══════════════════════════════════════════════════════════════════
      FILTROS Y BÚSQUEDA (tabla de empleados)
      ══════════════════════════════════════════════════════════════════ */
@@ -34,9 +40,12 @@ document.addEventListener('DOMContentLoaded', function () {
     function renderFila(emp) {
       var estadoClass = emp.estado === 'activo' ? 'active' : 'inactive';
       var mutedClass  = emp.estado === 'inactivo' ? ' class="is-muted"' : '';
+      var avatarHtml  = emp.foto
+        ? '<span class="avatar avatar--md avatar--primary"><img src="' + escHtml(urlFoto(emp.foto)) + '" alt="' + escHtml(emp.nombre) + '"></span>'
+        : '<span class="avatar avatar--md avatar--primary">' + escHtml(emp.iniciales) + '</span>';
       return '<tr' + mutedClass + '>' +
         '<td><div class="avatar-group">' +
-          '<span class="avatar avatar--md avatar--primary">' + escHtml(emp.iniciales) + '</span>' +
+          avatarHtml +
           '<span class="avatar-group__name">' + escHtml(emp.nombre) + '</span>' +
         '</div></td>' +
         '<td class="text-support">' + escHtml(emp.cedula) + '</td>' +
@@ -154,19 +163,131 @@ document.addEventListener('DOMContentLoaded', function () {
       pasoActual = numero;
     }
 
-    function validarPasoActual() {
-      var panel = wizardModalEl.querySelector('.wizard-panel[data-step="' + pasoActual + '"]');
+    /* checkValidity() de HTML5 no es confiable para campos dentro de un
+       panel con display:none: el navegador los considera "no renderizados"
+       y los excluye de la validación de restricciones, reportando siempre
+       válido sin importar su contenido -- esto hacía que validarTodosLosPasos()
+       nunca detectara un campo requerido vacío en un paso distinto al activo
+       (ej. el cargo del paso 4 al presionar "Finalizar" desde el paso 6).
+       Por eso el estado "vacío" se verifica manualmente aquí, funcione o no
+       el panel esté visible; checkValidity() solo se usa como validación
+       extra de formato (email, fecha, etc.) cuando el panel sí está visible. */
+    function campoEstaVacio(campo) {
+      if (campo.type === 'radio') {
+        var grupo = wizardModalEl.querySelectorAll('input[name="' + campo.name + '"]');
+        return !Array.from(grupo).some(function (el) { return el.checked; });
+      }
+      if (campo.type === 'checkbox') return !campo.checked;
+      return campo.value === null || String(campo.value).trim() === '';
+    }
+
+    function validarPaso(numero) {
+      var panel = wizardModalEl.querySelector('.wizard-panel[data-step="' + numero + '"]');
+      if (!panel) return true;
+      var esPanelVisible = panel.classList.contains('is-active');
       var valido = true;
       panel.querySelectorAll('[required]').forEach(function (campo) {
-        if (!campo.checkValidity()) valido = false;
+        var invalido = campoEstaVacio(campo) || (esPanelVisible && !campo.checkValidity());
+        if (invalido) valido = false;
+        campo.classList.toggle('is-invalid', invalido);
       });
-      if (!valido) {
-        panel.querySelectorAll('[required]').forEach(function (campo) {
-          campo.classList.toggle('is-invalid', !campo.checkValidity());
-        });
-        Swal.fire('Campos incompletos', 'Completa los campos obligatorios (*) antes de continuar.', 'warning');
+      return valido;
+    }
+
+    /* Hace scroll y foco al primer campo [required] inválido del paso dado,
+       para que el usuario lo ubique de inmediato. */
+    function enfocarPrimerCampoInvalido(numero) {
+      var panel = wizardModalEl.querySelector('.wizard-panel[data-step="' + numero + '"]');
+      if (!panel) return;
+      var campo = panel.querySelector('[required].is-invalid');
+      if (campo) {
+        campo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        campo.focus({ preventScroll: true });
+      }
+    }
+
+    /* Inserta (o reutiliza) un banner de aviso al inicio del panel indicado,
+       usando el mismo estilo info-alert--warning que ya existe en el
+       resumen. Reemplaza el popup de SweetAlert para que el error quede
+       visible junto a los campos, sin taparlos con un modal encima. */
+    function mostrarErrorPaso(numero, mensaje) {
+      var panel = wizardModalEl.querySelector('.wizard-panel[data-step="' + numero + '"]');
+      if (!panel) return;
+      var alerta = panel.querySelector('.wizard-inline-alert');
+      if (!alerta) {
+        alerta = document.createElement('div');
+        alerta.className = 'info-alert info-alert--warning wizard-inline-alert mb-3';
+        alerta.innerHTML =
+          '<div class="info-alert__icon"><i class="bi bi-exclamation-circle"></i></div>' +
+          '<div><div class="info-alert__title">Campos incompletos</div>' +
+          '<p class="info-alert__text wizard-inline-alert__text mb-0"></p></div>';
+        panel.insertBefore(alerta, panel.firstChild);
+      }
+      alerta.querySelector('.wizard-inline-alert__text').textContent = mensaje;
+    }
+
+    /* Quita el banner de aviso del paso indicado (si existe). */
+    function limpiarErrorPaso(numero) {
+      var panel = wizardModalEl.querySelector('.wizard-panel[data-step="' + numero + '"]');
+      if (!panel) return;
+      var alerta = panel.querySelector('.wizard-inline-alert');
+      if (alerta) alerta.remove();
+    }
+
+    /* Limpia el estado inválido de un campo en cuanto el usuario lo corrige
+       (input/change), y si ya no queda ningún campo inválido en su paso,
+       retira también el banner de ese paso. Delegado sobre todo el modal
+       para cubrir cualquier campo [required] de cualquier paso. */
+    function limpiarValidacionCampo(campo) {
+      if (!campo || !campo.hasAttribute || !campo.hasAttribute('required')) return;
+      if (!campo.checkValidity()) return;
+      campo.classList.remove('is-invalid');
+      var panel = campo.closest('.wizard-panel');
+      if (!panel) return;
+      if (!panel.querySelector('[required].is-invalid')) {
+        limpiarErrorPaso(Number(panel.dataset.step));
+      }
+    }
+    wizardModalEl.addEventListener('input', function (e) { limpiarValidacionCampo(e.target); });
+    wizardModalEl.addEventListener('change', function (e) { limpiarValidacionCampo(e.target); });
+
+    /* Valida el paso donde el usuario está parado actualmente (uso normal
+       de "Siguiente" / botones "Editar" del resumen). Muestra/oculta el
+       banner inline según corresponda, en vez de un popup. */
+    function validarPasoActual() {
+      var valido = validarPaso(pasoActual);
+      if (valido) {
+        limpiarErrorPaso(pasoActual);
+      } else {
+        mostrarErrorPaso(pasoActual, 'Completa los campos obligatorios (*) antes de continuar.');
+        enfocarPrimerCampoInvalido(pasoActual);
       }
       return valido;
+    }
+
+    /* Revalida los pasos 1 a totalPasos-1 (el último paso es solo el
+       resumen y no tiene inputs). Se usa al presionar "Finalizar" en vez
+       de validarPasoActual(), porque ese solo miraba el panel activo (el
+       resumen) y dejaba pasar campos obligatorios vacíos que hubieran
+       quedado incompletos en pasos anteriores -- por ejemplo si el
+       usuario entró por un botón "Editar" del resumen, borró un campo
+       requerido y cerró/regresó sin volver a pasar por "Siguiente" en
+       ese paso. El paso 5 (Formación Académica) no tiene [required]
+       propios en su panel, así que siempre pasa: es intencionalmente
+       opcional.
+       Si en algún momento se decide hacer obligatorio al menos un
+       título, aquí es donde se agregaría: revisar
+       `titulosAgregados.length === 0` y saltar al paso 5 con un aviso. */
+    function validarTodosLosPasos() {
+      for (var n = 1; n < totalPasos; n++) {
+        if (!validarPaso(n)) {
+          mostrarPaso(n);
+          mostrarErrorPaso(n, 'Faltan campos obligatorios (*) en este paso. Complétalos antes de finalizar.');
+          enfocarPrimerCampoInvalido(n);
+          return false;
+        }
+      }
+      return true;
     }
 
     document.getElementById('btnWizardSiguiente').addEventListener('click', function () {
@@ -201,6 +322,8 @@ document.addEventListener('DOMContentLoaded', function () {
       renderTitulos();
       form.reset();
       form.classList.remove('was-validated');
+      wizardModalEl.querySelectorAll('.wizard-inline-alert').forEach(function (el) { el.remove(); });
+      wizardModalEl.querySelectorAll('[required].is-invalid').forEach(function (el) { el.classList.remove('is-invalid'); });
       mostrarPaso(1);
       var previewEl = document.getElementById('fotoPreview');
       if (previewEl) previewEl.innerHTML = '<i class="bi bi-person"></i>';
@@ -339,7 +462,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     /* ---------- Sub-modales anidados: abrir sin cerrar padres ---------- */
-    // Los botones "+" en modal-titulo.php usan IDs en lugar de data-bs-toggle
+    // Los botones "+" usan IDs en lugar de data-bs-toggle
     // para evitar que Bootstrap propague el evento de cierre al modal padre.
     var btnAbrirNuevoTitulo = document.getElementById('btnAbrirNuevoTitulo');
     if (btnAbrirNuevoTitulo) btnAbrirNuevoTitulo.addEventListener('click', function (e) {
@@ -353,6 +476,12 @@ document.addEventListener('DOMContentLoaded', function () {
       bootstrap.Modal.getOrCreateInstance(document.getElementById('modalNuevaInstitucion')).show();
     });
 
+    var btnAbrirNuevoTipoInstitucion = document.getElementById('btnAbrirNuevoTipoInstitucion');
+    if (btnAbrirNuevoTipoInstitucion) btnAbrirNuevoTipoInstitucion.addEventListener('click', function (e) {
+      e.stopPropagation();
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('modalNuevoTipoInstitucion')).show();
+    });
+
     /* ---------- Nuevo Título (catálogo) ---------- */
     var btnGuardarNuevoTitulo = document.getElementById('btnGuardarNuevoTitulo');
     if (btnGuardarNuevoTitulo) btnGuardarNuevoTitulo.addEventListener('click', function () {
@@ -363,13 +492,49 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(function (r) { return r.json(); })
         .then(function (data) {
           if (!data.ok) { Swal.fire('Error', data.mensaje || 'No se pudo registrar el título.', 'error'); return; }
-          var opt = document.createElement('option');
-          opt.value = data.titulo.id_titulo;
-          opt.textContent = data.titulo.nombre;
-          opt.selected = true;
-          document.getElementById('tituloSelect').appendChild(opt);
+          var selectTitulo = document.getElementById('tituloSelect');
+          // Verificar si ya existe en el select
+          var optExistente = Array.from(selectTitulo.options).find(function (o) { return o.value == data.titulo.id_titulo; });
+          if (!optExistente) {
+            var opt = document.createElement('option');
+            opt.value = data.titulo.id_titulo;
+            opt.textContent = data.titulo.nombre;
+            selectTitulo.appendChild(opt);
+            opt.selected = true;
+          } else {
+            optExistente.selected = true;
+          }
           document.getElementById('nuevoTituloNombre').value = '';
           bootstrap.Modal.getInstance(document.getElementById('modalNuevoTitulo')).hide();
+          Swal.fire({ icon: 'success', title: 'Título listo', text: data.mensaje || 'Título agregado al catálogo correctamente.', timer: 1400, showConfirmButton: false });
+        })
+        .catch(function () { Swal.fire('Error', 'No se pudo conectar con el servidor.', 'error'); });
+    });
+
+    /* ---------- Nuevo Tipo de Institución (catálogo) ---------- */
+    var btnGuardarNuevoTipoInstitucion = document.getElementById('btnGuardarNuevoTipoInstitucion');
+    if (btnGuardarNuevoTipoInstitucion) btnGuardarNuevoTipoInstitucion.addEventListener('click', function () {
+      var nombre = document.getElementById('nuevoTipoInstitucionNombre').value.trim();
+      if (!nombre) { Swal.fire('Error', 'Escribe el nombre del tipo de institución.', 'warning'); return; }
+
+      fetch(route + 'storeTipoInstitucionAjax', { method: 'POST', body: new URLSearchParams({ nombre: nombre }) })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (!data.ok) { Swal.fire('Error', data.mensaje || 'No se pudo registrar el tipo de institución.', 'error'); return; }
+          var selectTipo = document.getElementById('nuevaInstitucionTipo');
+          var optExistente = Array.from(selectTipo.options).find(function (o) { return o.value == data.tipo_institucion.id_tipo_institucion; });
+          if (!optExistente) {
+            var opt = document.createElement('option');
+            opt.value = data.tipo_institucion.id_tipo_institucion;
+            opt.textContent = data.tipo_institucion.nombre;
+            selectTipo.appendChild(opt);
+            opt.selected = true;
+          } else {
+            optExistente.selected = true;
+          }
+          document.getElementById('nuevoTipoInstitucionNombre').value = '';
+          bootstrap.Modal.getInstance(document.getElementById('modalNuevoTipoInstitucion')).hide();
+          Swal.fire({ icon: 'success', title: 'Tipo registrado', text: data.mensaje || 'Tipo de institución guardado correctamente.', timer: 1400, showConfirmButton: false });
         })
         .catch(function () { Swal.fire('Error', 'No se pudo conectar con el servidor.', 'error'); });
     });
@@ -385,14 +550,21 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(function (r) { return r.json(); })
         .then(function (data) {
           if (!data.ok) { Swal.fire('Error', data.mensaje || 'No se pudo registrar la institución.', 'error'); return; }
-          var opt = document.createElement('option');
-          opt.value = data.institucion.id_institucion;
-          opt.textContent = data.institucion.nombre;
-          opt.selected = true;
-          document.getElementById('tituloInstitucion').appendChild(opt);
+          var selectInst = document.getElementById('tituloInstitucion');
+          var optExistente = Array.from(selectInst.options).find(function (o) { return o.value == data.institucion.id_institucion; });
+          if (!optExistente) {
+            var opt = document.createElement('option');
+            opt.value = data.institucion.id_institucion;
+            opt.textContent = data.institucion.nombre;
+            selectInst.appendChild(opt);
+            opt.selected = true;
+          } else {
+            optExistente.selected = true;
+          }
           document.getElementById('nuevaInstitucionNombre').value = '';
           document.getElementById('nuevaInstitucionTipo').value = '';
           bootstrap.Modal.getInstance(document.getElementById('modalNuevaInstitucion')).hide();
+          Swal.fire({ icon: 'success', title: 'Institución registrada', text: data.mensaje || 'Institución guardada correctamente.', timer: 1400, showConfirmButton: false });
         })
         .catch(function () { Swal.fire('Error', 'No se pudo conectar con el servidor.', 'error'); });
     });
@@ -444,13 +616,16 @@ document.addEventListener('DOMContentLoaded', function () {
     /* ---------- Envío final ---------- */
     form.addEventListener('submit', function (event) {
       event.preventDefault();
-      if (!validarPasoActual()) return;
+      if (!validarTodosLosPasos()) return;
 
       document.getElementById('titulosJson').value = JSON.stringify(titulosAgregados);
+
+      var wizardInstancia = bootstrap.Modal.getOrCreateInstance(wizardModalEl);
 
       fetch(route + 'storeAjax', { method: 'POST', body: new FormData(form) })
         .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
         .then(function (result) {
+          wizardInstancia.hide();
           if (!result.ok || !result.data.ok) {
             Swal.fire('Error', result.data.mensaje || 'No se pudo registrar el empleado.', 'error');
             return;
@@ -458,7 +633,10 @@ document.addEventListener('DOMContentLoaded', function () {
           Swal.fire({ icon: 'success', title: 'Empleado registrado', text: result.data.mensaje, timer: 1600, showConfirmButton: false })
             .then(function () { window.location.reload(); });
         })
-        .catch(function () { Swal.fire('Error', 'No se pudo conectar con el servidor.', 'error'); });
+        .catch(function () {
+          wizardInstancia.hide();
+          Swal.fire('Error', 'No se pudo conectar con el servidor.', 'error');
+        });
     });
   }
 
@@ -502,7 +680,12 @@ document.addEventListener('DOMContentLoaded', function () {
       : null;
 
     var avatarEl = document.getElementById('verEmpleado__avatar');
-    if (avatarEl) avatarEl.className = 'avatar avatar--xl avatar--primary';
+    if (avatarEl) {
+      avatarEl.className = 'avatar avatar--xl avatar--primary';
+      avatarEl.innerHTML = d.foto
+        ? '<img src="' + urlFoto(d.foto) + '" alt="' + (nombreCompleto || 'Empleado') + '">'
+        : iniciales;
+    }
     set('verEmpleado__iniciales',    iniciales);
     set('verEmpleado__nombre',       nombreCompleto);
     set('verEmpleado__cargo',        d.cargo || '—');
@@ -525,9 +708,16 @@ document.addEventListener('DOMContentLoaded', function () {
     set('verEmpleado__estadoValor', esActivo ? 'Personal Activo' : 'Personal Inactivo');
 
     var formacion = '—';
-    if (d.id_titulo) {
-      formacion = 'Título registrado';
-      if (d.fecha_obtencion) formacion += ' (' + formatFecha(d.fecha_obtencion) + ')';
+    if (d.formaciones && d.formaciones.length > 0) {
+      formacion = d.formaciones.map(function (f) {
+        var texto = (f.titulo_nombre || 'Título') + ' (' + (f.institucion_nombre || 'Institución') + ')';
+        if (f.fecha_obtencion) texto += ' · ' + formatFecha(f.fecha_obtencion);
+        return texto;
+      }).join(' | ');
+    } else if (d.titulo_nombre || d.id_titulo) {
+      formacion = (d.titulo_nombre || 'Título registrado');
+      if (d.institucion_nombre) formacion += ' (' + d.institucion_nombre + ')';
+      if (d.fecha_obtencion) formacion += ' · ' + formatFecha(d.fecha_obtencion);
     }
     set('verEmpleado__formacion', formacion);
   }
@@ -568,6 +758,52 @@ document.addEventListener('DOMContentLoaded', function () {
         .catch(function () { Swal.fire('Error', 'No se pudo conectar con el servidor.', 'error'); });
     });
 
+    /* ---------- Foto de perfil (modal editar) ---------- */
+    var fotoInputEditar   = document.getElementById('editEmpleado__foto');
+    var fotoPreviewEditar = document.getElementById('editEmpleado__fotoPreview');
+    var fotoQuitarEditar  = document.getElementById('editEmpleado__quitarFoto');
+    var fotoActualEditar  = document.getElementById('editEmpleado__fotoActual');
+    var FOTO_ICONO_VACIO  = '<i class="bi bi-person"></i>';
+
+    if (fotoInputEditar && fotoPreviewEditar && fotoQuitarEditar) {
+      fotoInputEditar.addEventListener('change', function () {
+        var file = fotoInputEditar.files && fotoInputEditar.files[0];
+        if (!file) return;
+
+        if (file.size > 2 * 1024 * 1024) {
+          Swal.fire('Imagen muy pesada', 'La foto no debe superar 2 MB.', 'warning');
+          fotoInputEditar.value = '';
+          return;
+        }
+
+        var reader = new FileReader();
+        reader.onload = function (e) {
+          fotoPreviewEditar.innerHTML = '<img src="' + e.target.result + '" alt="Foto">';
+          fotoQuitarEditar.classList.remove('d-none');
+        };
+        reader.readAsDataURL(file);
+      });
+
+      fotoQuitarEditar.addEventListener('click', function () {
+        var idEmpleado = document.getElementById('editEmpleado__id') && document.getElementById('editEmpleado__id').value;
+        var fotoAnterior = fotoActualEditar ? fotoActualEditar.value : '';
+
+        // Limpiar UI de inmediato
+        fotoInputEditar.value = '';
+        if (fotoActualEditar) fotoActualEditar.value = '';
+        fotoPreviewEditar.innerHTML = FOTO_ICONO_VACIO;
+        fotoQuitarEditar.classList.add('d-none');
+
+        // Eliminar archivo del servidor si el empleado ya tenía foto guardada
+        if (idEmpleado && fotoAnterior) {
+          fetch(route + 'removePhotoAjax', {
+            method: 'POST',
+            body: new URLSearchParams({ id: idEmpleado })
+          }).catch(function () { /* silencioso */ });
+        }
+      });
+    }
+
     formEditar.addEventListener('submit', function (e) {
       e.preventDefault();
       if (!formEditar.checkValidity()) { formEditar.classList.add('was-validated'); return; }
@@ -594,6 +830,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     modalEditarEl.addEventListener('hidden.bs.modal', function () {
       formEditar.classList.remove('was-validated');
+      /* Resetea el preview de foto para que no se arrastre al abrir otro empleado */
+      if (fotoPreviewEditar) fotoPreviewEditar.innerHTML = FOTO_ICONO_VACIO;
+      if (fotoQuitarEditar)  fotoQuitarEditar.classList.add('d-none');
+      if (fotoInputEditar)   fotoInputEditar.value = '';
     });
   }
 
@@ -632,6 +872,18 @@ document.addEventListener('DOMContentLoaded', function () {
     setSelect('editEmpleado__gradoAcademico', d.id_grado_academico);
     setSelect('editEmpleado__institucion',    d.id_institucion);
     set('editEmpleado__fechaObtencion',       d.fecha_obtencion);
+
+    /* Foto actual: preview + campo oculto para conservarla si no se cambia */
+    var previewEl     = document.getElementById('editEmpleado__fotoPreview');
+    var fotoActualEl  = document.getElementById('editEmpleado__fotoActual');
+    var quitarBtn     = document.getElementById('editEmpleado__quitarFoto');
+    if (previewEl) {
+      previewEl.innerHTML = d.foto
+        ? '<img src="' + urlFoto(d.foto) + '" alt="Foto">'
+        : '<i class="bi bi-person"></i>';
+    }
+    if (fotoActualEl) fotoActualEl.value = d.foto || '';
+    if (quitarBtn)    quitarBtn.classList.toggle('d-none', !d.foto);
   }
 
   /* ══════════════════════════════════════════════════════════════════
@@ -648,5 +900,27 @@ document.addEventListener('DOMContentLoaded', function () {
           .catch(function () { checkbox.checked = !checked; Swal.fire('Error', 'No se pudo conectar con el servidor.', 'error'); });
       });
     });
+  });
+
+  /* ══════════════════════════════════════════════════════════════════
+     Modales anidados: control de scroll y z-index dinámico
+     ══════════════════════════════════════════════════════════════════ */
+  document.addEventListener('hidden.bs.modal', function () {
+    if (document.querySelectorAll('.modal.show').length > 0) {
+      document.body.classList.add('modal-open');
+    }
+  });
+
+  document.addEventListener('show.bs.modal', function (event) {
+    var modalesAbiertos = document.querySelectorAll('.modal.show').length;
+    var zIndex = 1050 + (15 * (modalesAbiertos + 1));
+    event.target.style.zIndex = zIndex;
+    setTimeout(function () {
+      var backdrops = document.querySelectorAll('.modal-backdrop');
+      if (backdrops.length > 0) {
+        var ultimoBackdrop = backdrops[backdrops.length - 1];
+        ultimoBackdrop.style.zIndex = zIndex - 1;
+      }
+    }, 0);
   });
 });

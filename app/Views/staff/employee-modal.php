@@ -94,3 +94,4 @@ $pasos = [
 <?php include __DIR__ . '/partials/modal-titulo.php'; ?>
 <?php include __DIR__ . '/partials/modal-nuevo-titulo.php'; ?>
 <?php include __DIR__ . '/partials/modal-nueva-institucion.php'; ?>
+<?php include __DIR__ . '/partials/modal-nuevo-tipo-institucion.php'; ?>

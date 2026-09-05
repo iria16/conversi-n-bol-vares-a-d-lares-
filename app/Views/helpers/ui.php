@@ -92,7 +92,7 @@ if (!function_exists('sigde_nav_sections')) {
                 'roles' => ['secretaria'],
                 'items' => [
                     ['id' => 'estudiantes',   'label' => 'Estudiantes',   'icon' => 'bi-mortarboard',      'href' => BASE_URL .'estudiantes/index'],
-                    ['id' => 'inscripcion',   'label' => 'Inscripción',   'icon' => 'bi-person-plus',      'href' => '#'],
+                    ['id' => 'inscripcion',   'label' => 'Inscripción',   'icon' => 'bi-person-plus',      'href' => BASE_URL . 'inscripciones/index'],
                     ['id' => 'ratificacion',  'label' => 'Ratificación',  'icon' => 'bi-arrow-repeat',     'href' => '#'],
                     ['id' => 'retiro',        'label' => 'Retiro',        'icon' => 'bi-box-arrow-right',  'href' => '#'],
                     ['id' => 'egreso',        'label' => 'Egreso',        'icon' => 'bi-mortarboard-fill', 'href' => '#'],
