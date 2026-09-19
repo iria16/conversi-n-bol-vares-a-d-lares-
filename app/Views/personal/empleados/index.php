@@ -216,9 +216,9 @@ ob_start();
 ?>
 
 <?php
-include __DIR__ . '/employee-modal.php';
-include __DIR__ . '/show-modal.php';
-include __DIR__ . '/edit-modal.php';
+include __DIR__ . '/modals/';
+include __DIR__ . '/modals/';
+include __DIR__ . '/modals/';
 
 $pageContent = ob_get_clean();
 require __DIR__ . '/../layouts/app.php';

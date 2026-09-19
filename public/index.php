@@ -1,12 +1,4 @@
 <?php
-ob_start();
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
-// public/index.php
-// Front Controller: unico punto de entrada del sistema
-// Gestiona sesiones, rutas, permisos y ejecuta el controlador correspondiente
 
 // 1. CONFIGURACION Y SEGURIDAD DE LA SESION
 session_set_cookie_params([
