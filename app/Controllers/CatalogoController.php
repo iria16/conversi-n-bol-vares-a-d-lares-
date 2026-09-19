@@ -1,250 +1,240 @@
 <?php
 
-require_once __DIR__ . '/BaseController.php';
-require_once __DIR__ . '/../Models/CatalogoModel.php';
-require_once __DIR__ . '/../Models/GradeModel.php';
-require_once __DIR__ . '/../Models/SectionModel.php';
-require_once __DIR__ . '/../Models/ShiftModel.php';
-require_once __DIR__ . '/../Models/AcademicDegreeModel.php';
-require_once __DIR__ . '/../Models/TitleModel.php';
-require_once __DIR__ . '/../Models/InstitutionTypeModel.php';
-require_once __DIR__ . '/../Models/RoleModel.php';
-require_once __DIR__ . '/../Models/ParentescoModel.php';
-require_once __DIR__ . '/../Models/OcupacionModel.php';
-require_once __DIR__ . '/../Models/NivelInstruccionModel.php';
-require_once __DIR__ . '/../Models/MotivoRetiroModel.php';
+declare(strict_types=1);
 
-class CatalogoController extends BaseController
+namespace App\Controllers;
+
+use App\Interfaces\Listable;
+use App\Interfaces\Updatable;
+use PDO;
+use Throwable;
+
+/**
+ * Gestión de Catálogos del Sistema — un único controlador para todos
+ * los catálogos maestros (grado, sección, turno, etc.), cada uno
+ * resuelto a su propia clase de modelo vía self::CATALOGOS.
+ *
+ * NOTA DE RUTAS: el whitelist del router para 'catalogo' usa los
+ * mismos nombres que CrudController (store/update/toggleStatus), así
+ * que store() y toggleStatus() quedan heredados sin tocar. update()
+ * sí se sobrescribe: a diferencia del resto de módulos, acá hace
+ * falta pasarle el id actual a validate() como $excludeId para no
+ * marcar el propio registro como "nombre duplicado".
+ */
+class CatalogoController extends CrudController
 {
-    protected string $viewPath  = 'settings';
+    protected string $viewPath  = 'configuracion/catalogo';
     protected string $routeName = 'catalogo';
-    protected array $allowedRoles = ['admin'];
-    protected int $perPage = 10;
 
-    // Copia propia del PDO, guardada dentro de createModel(). No reutilizamos
-    // una posible propiedad $pdo de BaseController para evitar choques de
-    // visibilidad/tipo con la clase padre.
-    private PDO $pdoCatalogo;
-
-    // Registro de tipos de catálogo soportados: clave => [nombre visible, ícono, clase del Model]
-    private const TIPOS = [
-        'grado'           => ['nombre' => 'Grado',           'icono' => 'bi-mortarboard',   'model' => GradeModel::class],
-        'seccion'         => ['nombre' => 'Sección',         'icono' => 'bi-diagram-3',     'model' => SectionModel::class],
-        'turno'           => ['nombre' => 'Turno',           'icono' => 'bi-clock-history', 'model' => ShiftModel::class],
-        'grado_academico' => ['nombre' => 'Grado Académico', 'icono' => 'bi-book',          'model' => AcademicDegreeModel::class],
-        'titulo'          => ['nombre' => 'Título',          'icono' => 'bi-award',         'model' => TitleModel::class],
-        'tipo_institucion' => ['nombre' => 'Tipo de Institución', 'icono' => 'bi-building',      'model' => InstitutionTypeModel::class],
-        'rol'          => ['nombre' => 'Rol',             'icono' => 'bi-person-badge',  'model' => RoleModel::class],
-        'parentesco'    => ['nombre' => 'Parentesco',      'icono' => 'bi-people',        'model' => ParentescoModel::class],
-        'ocupacion'     => ['nombre' => 'Ocupación',       'icono' => 'bi-briefcase',     'model' => OcupacionModel::class],
-        'nivel_instruccion' => ['nombre' => 'Nivel de Instrucción', 'icono' => 'bi-journal-text',  'model' => NivelInstruccionModel::class],
-        'motivo_retiro' => ['nombre' => 'Motivo de Retiro', 'icono' => 'bi-x-circle',      'model' => MotivoRetiroModel::class],
+    private const CATALOGOS = [
+        'grado'           => ['nombre' => 'Grado',              'icono' => 'bi-mortarboard',       'modelClass' => 'GradoModel'],
+        'seccion'         => ['nombre' => 'Sección',            'icono' => 'bi-diagram-3',          'modelClass' => 'SeccionModel'],
+        'turno'           => ['nombre' => 'Turno',              'icono' => 'bi-clock',              'modelClass' => 'TurnoModel'],
+        'tipo_documento'  => ['nombre' => 'Tipo de Documento',  'icono' => 'bi-file-earmark-text',  'modelClass' => 'TipoDocumentoModel'],
+        'grado_academico' => ['nombre' => 'Grado Académico',    'icono' => 'bi-award',              'modelClass' => 'GradoAcademicoModel'],
+        'titulo'          => ['nombre' => 'Título',             'icono' => 'bi-person-badge',       'modelClass' => 'TituloModel'],
+        'tipo_asignacion' => ['nombre' => 'Tipo de Asignación', 'icono' => 'bi-briefcase',          'modelClass' => 'TipoAsignacionModel'],
+        'rol'             => ['nombre' => 'Rol',                'icono' => 'bi-shield-lock',        'modelClass' => 'RolModel'],
+        'parentesco'      => ['nombre' => 'Parentesco',         'icono' => 'bi-people',              'modelClass' => 'ParentescoModel'],
+        'motivo_retiro'   => ['nombre' => 'Motivo de Retiro',   'icono' => 'bi-box-arrow-right',    'modelClass' => 'MotivoRetiroModel'],
     ];
 
-    private string $tipoActivo;
+    private string $catalogoActivo;
 
-    // El tipo puede venir por GET (index) o por POST (los AJAX); $_REQUEST cubre ambos
-    // porque el controlador se instancia una sola vez por petición.
-    protected function createModel(PDO $pdo)
+    protected function createModel(PDO $pdo): object
     {
-        $this->pdoCatalogo = $pdo;
+        $this->catalogoActivo = $this->resolveTipoActivo();
 
-        $tipo = $_REQUEST['tipo'] ?? array_key_first(self::TIPOS);
-
-        if (!isset(self::TIPOS[$tipo])) {
-            $tipo = array_key_first(self::TIPOS);
-        }
-
-        $this->tipoActivo = $tipo;
-        $claseModel = self::TIPOS[$tipo]['model'];
-
-        return new $claseModel($pdo);
+        return $this->instantiateModel($this->catalogoActivo, $pdo);
     }
 
-    // -------------------------------------------------------------
-    // LISTADO (selector de catálogo + filtros + tabla)
-    // -------------------------------------------------------------
+    private function resolveTipoActivo(): string
+    {
+        $tipo = $_GET['tipo'] ?? $_POST['tipo'] ?? '';
+        return array_key_exists($tipo, self::CATALOGOS) ? $tipo : array_key_first(self::CATALOGOS);
+    }
+
+    private function instantiateModel(string $tipo, ?PDO $pdo = null): object
+    {
+        $fqcn = 'App\\Models\\' . self::CATALOGOS[$tipo]['modelClass'];
+
+        return new $fqcn($pdo ?? $this->pdo);
+    }
+
+    /**
+     * Se sobrescribe en vez de usar getExtraIndexData(): acá los
+     * elementos necesitan normalizarse (cada tabla tiene su propia PK,
+     * la vista/JS siempre esperan 'id') y hay que instanciar TODOS los
+     * catálogos para armar el selector de tipos — dos cosas que el
+     * hook del padre no resuelve porque solo agrega variables extra,
+     * no transforma $items ni cambia de modelo.
+     */
     public function index(): void
     {
         try {
-            $paginaActual = max(1, (int)($_GET['page'] ?? 1));
+            $model   = $this->getModel();
+            $page    = max(1, (int)($_GET['page'] ?? 1));
             $filters = $this->getFiltersFromRequest();
 
-            $elementosRaw = $this->model->getAll($filters, $paginaActual, $this->perPage);
-            $total        = $this->model->countAll($filters);
+            $elementos = $model instanceof Listable
+                ? $this->normalizarPrimaryKey($model->getAll($filters, $page, $this->perPage))
+                : [];
+            $total = $model instanceof Listable ? $model->countAll($filters) : 0;
 
-            $elementos = array_map(static function (array $row): array {
-                return [
-                    'id'     => (int) $row['id'],
-                    'nombre' => $row['nombre'],
-                    'estado' => strtolower($row['estado']), // ACTIVO -> activo, INACTIVO -> inactivo
-                ];
-            }, $elementosRaw);
-
+            $paginacion     = $this->buildPagination($total, $page, $this->perPage);
+            $catalogoActivo = $this->catalogoActivo;
             $tiposCatalogo  = $this->buildTiposCatalogo();
-            $catalogoActivo = $this->tipoActivo;
 
-            $paginacion = [
-                'desde'         => $total > 0 ? (($paginaActual - 1) * $this->perPage) + 1 : 0,
-                'hasta'         => min($paginaActual * $this->perPage, $total),
-                'total'         => $total,
-                'pagina_actual' => $paginaActual,
-                'total_paginas' => max(1, (int) ceil($total / $this->perPage)),
-            ];
-
-            require APP_PATH . "/Views/{$this->viewPath}/index.php";
+            require __DIR__ . "/../Views/{$this->viewPath}/index.php";
         } catch (Throwable $e) {
-            $this->handleError($e, 'Catálogos');
+            $this->handleError($e, static::class);
         }
     }
 
-    protected function getFiltersFromRequest(): array
+    /**
+     * edit() se sobrescribe por lo mismo que ya tenías documentado:
+     * normalización de PK, y preservar ?tipo= al redirigir si el id no
+     * existe (el edit() del padre redirige a index sin ese query param
+     * y manda al admin al primer catálogo en vez de quedarse donde
+     * estaba).
+     */
+    public function edit(): void
     {
-        return [
-            'q'      => trim($_GET['q'] ?? ''),
-            'estado' => $_GET['estado'] ?? '',
-        ];
+        try {
+            $model = $this->getModel();
+            $id    = (int)($_GET['id'] ?? 0);
+            $item  = ($id > 0 && method_exists($model, 'getById')) ? $model->getById($id) : null;
+
+            if (!$item) {
+                $this->setFlash('error', 'El registro solicitado no existe.');
+                $this->redirect('index', ['tipo' => $this->catalogoActivo]);
+            }
+
+            // Misma normalización de PK que index(): un solo lugar
+            // decide cómo se mapea la PK real de cada catálogo a 'id',
+            // para que listado y formulario de edición no puedan
+            // divergir si esa regla cambia.
+            [$item] = $this->normalizarPrimaryKey([$item]);
+
+            $catalogoActivo = $this->catalogoActivo;
+
+            require __DIR__ . "/../Views/{$this->viewPath}/edit.php";
+        } catch (Throwable $e) {
+            $this->handleError($e, static::class);
+        }
     }
 
-    // Arma la lista para el <select> de tipos, con el conteo total de cada catálogo
+    private function normalizarPrimaryKey(array $elementos): array
+    {
+        $pk = $this->getModel()->getPrimaryKey();
+
+        foreach ($elementos as &$el) {
+            $el['id'] = $el[$pk] ?? null;
+        }
+        unset($el);
+
+        return $elementos;
+    }
+
     private function buildTiposCatalogo(): array
     {
         $tipos = [];
 
-        foreach (self::TIPOS as $clave => $meta) {
-            // Reutiliza $this->model si ya es del tipo activo, para no reconectar de más
-            $model = ($clave === $this->tipoActivo) ? $this->model : new $meta['model']($this->pdoCatalogo);
+        foreach (self::CATALOGOS as $clave => $info) {
+            $model = $clave === $this->catalogoActivo
+                ? $this->getModel()
+                : $this->instantiateModel($clave);
 
             $tipos[] = [
                 'clave'  => $clave,
-                'nombre' => $meta['nombre'],
-                'icono'  => $meta['icono'],
-                'total'  => $model->countAll(),
+                'nombre' => $info['nombre'],
+                'icono'  => $info['icono'],
+                'total'  => $model->countAll([]),
             ];
         }
 
         return $tipos;
     }
 
-    // -------------------------------------------------------------
-    // NUEVO ELEMENTO (AJAX) — modal "+ Nuevo Elemento"
-    // -------------------------------------------------------------
-    public function storeAjax(): void
-    {
-        header('Content-Type: application/json');
-
-        $data   = $this->extractData($_POST);
-        $errors = $this->validate($data);
-
-        if (!empty($errors)) {
-            http_response_code(422);
-            echo json_encode(['ok' => false, 'mensaje' => implode(' ', $errors)]);
-            exit;
-        }
-
-        try {
-            $resultado = $this->model->crearElemento($data['nombre']);
-        } catch (Throwable $e) {
-            $this->jsonError($e, 'Catálogos');
-            return;
-        }
-
-        if (!$resultado['ok']) {
-            http_response_code(400);
-        }
-        echo json_encode($resultado);
-        exit;
-    }
-
-    // -------------------------------------------------------------
-    // ACTIVAR / DESACTIVAR ELEMENTO (AJAX) — switch en cada fila
-    // -------------------------------------------------------------
-    public function toggleEstadoAjax(): void
-    {
-        header('Content-Type: application/json');
-        $id = (int)($_POST['id'] ?? 0);
-
-        if ($id <= 0) {
-            http_response_code(400);
-            echo json_encode(['ok' => false, 'error' => 'ID inválido']);
-            exit;
-        }
-
-        try {
-            $resultado = $this->model->toggleEstado($id);
-        } catch (Throwable $e) {
-            $this->jsonError($e, 'Catálogos');
-            return;
-        }
-
-        if (!$resultado['ok']) {
-            http_response_code(400);
-            $resultado['mensaje'] = 'No se pudo actualizar el estado.';
-        }
-        echo json_encode($resultado);
-        exit;
-    }
-
-    // -------------------------------------------------------------
-    // EDITAR NOMBRE (AJAX) — ícono lápiz en cada fila
-    // -------------------------------------------------------------
-    public function updateAjax(): void
-    {
-        header('Content-Type: application/json');
-
-        $id     = (int)($_POST['id'] ?? 0);
-        $data   = $this->extractData($_POST);
-        $errors = $this->validate($data);
-
-        if ($id <= 0) {
-            http_response_code(400);
-            echo json_encode(['ok' => false, 'error' => 'ID inválido']);
-            exit;
-        }
-
-        if (!empty($errors)) {
-            http_response_code(422);
-            echo json_encode(['ok' => false, 'mensaje' => implode(' ', $errors)]);
-            exit;
-        }
-
-        try {
-            $ok = $this->model->updateNombre($id, $data['nombre']);
-        } catch (Throwable $e) {
-            $this->jsonError($e, 'Catálogos');
-            return;
-        }
-
-        if (!$ok) {
-            http_response_code(400);
-            echo json_encode(['ok' => false, 'mensaje' => 'No se pudo actualizar el elemento.']);
-            exit;
-        }
-
-        echo json_encode(['ok' => true, 'mensaje' => 'Elemento actualizado correctamente.']);
-        exit;
-    }
-
-    // -------------------------------------------------------------
-    // Requeridos por BaseController (usados en storeAjax()/updateAjax())
-    // -------------------------------------------------------------
-    protected function extractData(array $source): array
+    protected function getFiltersFromRequest(): array
     {
         return [
-            'nombre' => trim($source['nombre'] ?? ''),
+            'search' => trim($_GET['q'] ?? $_GET['search'] ?? ''),
+            'estado' => trim($_GET['estado'] ?? ''),
         ];
     }
 
-    protected function validate(array $data): array
+    /**
+     * El nombre se capitaliza acá (capitalizarTitulo(), heredado de
+     * TextoTrait) antes de validar y guardar, así que tanto store()
+     * como update() —ambos parten de extractData()— quedan cubiertos
+     * sin duplicar la lógica. "licenciado en informatica" se guarda
+     * como "Licenciado en Informática".
+     */
+    protected function extractData(array $source): array
     {
-        $errores = [];
+        return [
+            'nombre' => $this->capitalizarTitulo(trim($source['nombre'] ?? '')),
+        ];
+    }
 
-        if ($data['nombre'] === '') {
-            $errores[] = 'El nombre es obligatorio.';
-        } elseif (mb_strlen($data['nombre']) > 100) {
-            $errores[] = 'El nombre no puede superar los 100 caracteres.';
+    protected function validate(array $data, ?int $excludeId = null): array
+    {
+        $errors = [];
+        $model  = $this->getModel();
+
+        $minimo = $this->catalogoActivo === 'seccion' ? 1 : 2;
+        $maximo = 50;
+
+        if (empty($data['nombre'])) {
+            $errors['nombre'] = 'El nombre del elemento es obligatorio.';
+        } elseif (mb_strlen($data['nombre']) < $minimo) {
+            $errors['nombre'] = "El nombre debe tener al menos {$minimo} caracter" . ($minimo > 1 ? 'es' : '') . '.';
+        } elseif (mb_strlen($data['nombre']) > $maximo) {
+            $errors['nombre'] = "El nombre no puede superar los {$maximo} caracteres.";
+        } elseif ($model->existeNombre($data['nombre'], $excludeId)) {
+            $errors['nombre'] = 'Ya existe un registro con este nombre en el catálogo activo.';
         }
 
-        return $errores;
+        return $errors;
+    }
+
+    /**
+     * Se sobrescribe (no queda heredado) porque CrudController::update()
+     * llama a validate($data) con un solo argumento, y acá hace falta
+     * pasar $id como $excludeId para la validación de nombre duplicado.
+     */
+    public function update(): void
+    {
+        $model = $this->getModel();
+
+        if (!$model instanceof Updatable) {
+            $this->jsonResponse(false, null, 'Este catálogo no admite edición de registros.', 405);
+        }
+
+        $id = (int)($_POST['id'] ?? 0);
+        if ($id <= 0) {
+            $this->jsonResponse(false, null, 'ID inválido.', 400);
+        }
+
+        $data   = $this->extractData($_POST);
+        $errors = $this->validate($data, $id);
+
+        if (!empty($errors)) {
+            $this->jsonResponse(false, $errors, 'Hay errores en el formulario.', 422);
+        }
+
+        try {
+            $model->update($id, $data);
+        } catch (Throwable $e) {
+            $this->jsonError($e, static::class);
+        }
+
+        // Se devuelve $data (ya pasado por capitalizarTitulo() en
+        // extractData()) para que el frontend pueda pintar la fila con
+        // el nombre normalizado sin recargar la página; si solo se
+        // devolviera null, catalogo.js quedaría obligado a usar el
+        // valor crudo del formulario, que no coincide con lo guardado.
+        $this->jsonResponse(true, $data, 'Elemento actualizado correctamente.');
     }
 }

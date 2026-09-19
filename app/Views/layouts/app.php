@@ -54,5 +54,6 @@ $tieneNotificaciones = in_array($rolSesion, ['admin', 'secretaria', 'directivo']
   </div>
 
   <?php include __DIR__ . '/../partials/scripts.php'; ?>
+
 </body>
 </html>

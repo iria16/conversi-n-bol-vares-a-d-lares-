@@ -1,34 +1,18 @@
 <?php
 
-/**
- * LoginModel
- * 
- * Encapsula SOLO la lógica de autenticación:
- * - Login
- * - Verificación de bloqueo
- * - Intentos fallidos
- * 
- * NO maneja creación de usuarios, restablecimiento de contraseñas, etc.
- */
-require_once __DIR__ . '/Model.php';
+declare(strict_types=1);
+
+namespace App\Models;
+
+use PDO;
 
 class LoginModel extends Model
+
 {
-    // Umbrales de bloqueo centralizados aquí (antes eran números mágicos dentro del método).
-    // Públicas para que AuthController pueda armar mensajes ("te quedan X intentos")
-    // sin repetir el número por su cuenta.
     public const MAX_INTENTOS = 3;
     public const MINUTOS_BLOQUEO = 15;
 
-    // =========================================================
-    // MÉTODOS DE AUTENTICACIÓN (Login)
-    // =========================================================
-
-    /**
-     * Busca un usuario por su nombre de usuario para login.
-     * Devuelve SOLO los datos necesarios para autenticación.
-     */
-    public function obtenerPorUsuario(string $usuario): array|false 
+    private function consultarUsuarioBase(string $condicion, array $parametros): array|false
     {
         $sql = "SELECT 
                     u.id_usuario AS id, 
@@ -44,14 +28,31 @@ class LoginModel extends Model
                 FROM usuario u
                 INNER JOIN persona p ON u.id_persona = p.id_persona
                 INNER JOIN rol r ON u.id_rol = r.id_rol
-                WHERE u.nombre_usuario = :usuario 
+                WHERE {$condicion} 
                 AND u.estado != 'INACTIVO'
                 LIMIT 1";
 
         $stmt = $this->pdo->prepare($sql);
-        $stmt->execute(['usuario' => $usuario]);
-        
+        $stmt->execute($parametros);
+
         return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+    // MÉTODOS DE AUTENTICACIÓN Y CONSULTA
+
+    /**
+     * Obtiene los datos del usuario mediante su nombre de usuario (Login).
+     */
+    public function obtenerPorUsuario(string $usuario): array|false
+    {
+        return $this->consultarUsuarioBase("u.nombre_usuario = :usuario", ['usuario' => $usuario]);
+    }
+
+    /**
+     * Obtiene los datos del usuario mediante su ID (Sesiones y validaciones).
+     */
+    public function obtenerPorId(int $id): array|false
+    {
+        return $this->consultarUsuarioBase("u.id_usuario = :id", ['id' => $id]);
     }
 
     /**
@@ -62,7 +63,7 @@ class LoginModel extends Model
      * @param string|null $bloqueadoHasta Valor crudo de la columna
      *        bloqueado_hasta (formato DATETIME de MySQL) o null.
      */
-    public function verificarBloqueo(?string $bloqueadoHasta): array 
+    public function verificarBloqueo(?string $bloqueadoHasta): array
     {
         return $this->calcularEstadoBloqueo($bloqueadoHasta);
     }
@@ -73,7 +74,7 @@ class LoginModel extends Model
      * activa en el constructor de AuthController (ahí solo se cuenta con
      * $_SESSION['usuario_id'], no con el resultado de obtenerPorUsuario).
      */
-    public function verificarBloqueoPorId(int $usuarioId): array 
+    public function verificarBloqueoPorId(int $usuarioId): array
     {
         $sql = "SELECT bloqueado_hasta FROM usuario WHERE id_usuario = :id LIMIT 1";
         $stmt = $this->pdo->prepare($sql);
@@ -101,9 +102,9 @@ class LoginModel extends Model
             $diffSegundos = $tsBloqueo - $tsActual;
             $minutosRestantes = (int)ceil($diffSegundos / 60);
             $minutosRestantes = max(1, $minutosRestantes);
-            
+
             return [
-                'bloqueado' => true, 
+                'bloqueado' => true,
                 'minutos_restantes' => $minutosRestantes
             ];
         }
@@ -120,7 +121,7 @@ class LoginModel extends Model
      * Por eso el bloqueo se controla únicamente con `bloqueado_hasta`
      * (una fecha futura = usuario bloqueado), sin tocar `estado`.
      */
-    public function registrarIntentoFallido(int $usuarioId, int $intentosActuales): int 
+    public function registrarIntentoFallido(int $usuarioId, int $intentosActuales): int
     {
         $nuevosIntentos = $intentosActuales + 1;
 
@@ -146,7 +147,7 @@ class LoginModel extends Model
      * No modifica `estado`: el esquema solo admite ACTIVO/INACTIVO y el
      * estado de bloqueo se representa exclusivamente vía `bloqueado_hasta`.
      */
-    public function reiniciarIntentos(int $usuarioId): void 
+    public function reiniciarIntentos(int $usuarioId): void
     {
         $sql = "UPDATE usuario 
                 SET intentos_fallidos = 0, 
@@ -157,9 +158,7 @@ class LoginModel extends Model
         $stmt->execute(['id' => $usuarioId]);
     }
 
-    // =========================================================
     // CAMBIO DE CONTRASEÑA
-    // =========================================================
 
     /**
      * Actualiza la contraseña del usuario y limpia el flag de

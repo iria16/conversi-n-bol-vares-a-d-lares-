@@ -12,12 +12,6 @@
     overflow: hidden;
   }
 
-  // Fuerza ancho lg en el modal de credenciales
-  &#credencialesGeneradasModal {
-    .modal-dialog {
-      max-width: 800px;
-    }
-  }
 
   .modal-header {
     padding: 1.35rem 1.5rem 0.75rem;

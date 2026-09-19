@@ -1,24 +1,29 @@
 <?php
+declare(strict_types=1);
 
-require_once __DIR__ . '/Model.php';
+namespace App\Models;
+
+use PDO;
 
 abstract class BaseModel extends Model
 {
     protected string $table;
     protected string $primaryKey = 'id';
 
-    // Ya no redefinimos __construct: lo hereda de Model tal cual.
-
     public function getAll(array $filters = [], int $page = 1, int $perPage = 10): array
     {
         [$where, $params] = $this->buildFilters($filters);
 
         $sql = "SELECT * FROM {$this->table}";
-        if ($where) $sql .= " WHERE " . implode(" AND ", $where);
+        if ($where) {
+            $sql .= " WHERE " . implode(" AND ", $where);
+        }
         $sql .= " ORDER BY {$this->primaryKey} DESC LIMIT :limit OFFSET :offset";
 
         $stmt = $this->pdo->prepare($sql);
-        foreach ($params as $k => $v) $stmt->bindValue($k, $v);
+        foreach ($params as $k => $v) {
+            $stmt->bindValue($k, $v);
+        }
         $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
         $stmt->bindValue(':offset', ($page - 1) * $perPage, PDO::PARAM_INT);
         $stmt->execute();
@@ -30,7 +35,9 @@ abstract class BaseModel extends Model
     {
         [$where, $params] = $this->buildFilters($filters);
         $sql = "SELECT COUNT(*) FROM {$this->table}";
-        if ($where) $sql .= " WHERE " . implode(" AND ", $where);
+        if ($where) {
+            $sql .= " WHERE " . implode(" AND ", $where);
+        }
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
@@ -63,28 +70,15 @@ abstract class BaseModel extends Model
     public function delete(int $id): bool
     {
         return $this->pdo->prepare("DELETE FROM {$this->table} WHERE {$this->primaryKey} = :id")
-                          ->execute(['id' => $id]);
+                         ->execute(['id' => $id]);
     }
 
-    /**
-     * Alterna un campo de estado tipo ENUM('ACTIVO','INACTIVO') —
-     * el patrón universal en el esquema sidge (cargo, grado, rol de
-     * usuario, tipo_documento, turno, etc. usan exactamente este
-     * ENUM). Antes esto usaba `SET $field = NOT $field`, lo cual
-     * NO funciona sobre un ENUM: MySQL convierte el string a
-     * número (0) y lo niega (1), y 1 en un ENUM siempre apunta al
-     * PRIMER valor de la lista — es decir, el registro quedaba
-     * fijado en 'ACTIVO' sin importar su estado anterior.
-     *
-     * Si algún modelo hijo usa un campo de estado con otros valores
-     * (no ACTIVO/INACTIVO), debe sobrescribir este método con su
-     * propia lógica, igual que ya hace UserAccountModel.
-     */
     public function toggleStatus(int $id, string $field = 'estado'): bool
     {
         $sql = "UPDATE {$this->table} 
                 SET $field = CASE WHEN $field = 'ACTIVO' THEN 'INACTIVO' ELSE 'ACTIVO' END
                 WHERE {$this->primaryKey} = :id";
+        
         return $this->pdo->prepare($sql)->execute(['id' => $id]);
     }
 
@@ -94,7 +88,9 @@ abstract class BaseModel extends Model
         $params = [];
 
         foreach ($filters as $field => $value) {
-            if ($value === '' || $value === null) continue;
+            if ($value === '' || $value === null) {
+                continue;
+            }
 
             if ($field === 'search') {
                 $conds = [];
@@ -103,7 +99,9 @@ abstract class BaseModel extends Model
                     $conds[] = "$col LIKE :$key";
                     $params[$key] = "%$value%";
                 }
-                if ($conds) $where[] = "(" . implode(" OR ", $conds) . ")";
+                if ($conds) {
+                    $where[] = "(" . implode(" OR ", $conds) . ")";
+                }
             } else {
                 $where[] = "$field = :$field";
                 $params[$field] = $value;
@@ -113,6 +111,8 @@ abstract class BaseModel extends Model
         return [$where, $params];
     }
 
-    // Cada modelo hijo dice en qué columnas buscar con el texto del buscador
-    abstract protected function searchableFields(): array;
+    protected function searchableFields(): array
+    {
+        return [];
+    }
 }

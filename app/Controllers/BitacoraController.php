@@ -1,83 +1,111 @@
 <?php
 
-require_once __DIR__ . '/BaseController.php';
-require_once __DIR__ . '/../Models/BitacoraModel.php';
+declare(strict_types=1);
 
-class BitacoraController extends BaseController
+namespace App\Controllers;
+
+use App\Models\BitacoraModel;
+use PDO;
+use Throwable;
+
+/**
+ * Controlador de la Bitácora del Sistema (vista audit/index.php).
+ *
+ * Extiende ReadOnlyController: este módulo nunca escribe desde el
+ * frontend, así que no hay create/store/edit/update/delete/
+ * toggleStatus que redirigir ni rechazar — simplemente no existen en
+ * la jerarquía. El listado paginado lo resuelve ListableIndexTrait vía
+ * getFiltersFromRequest()/getExtraIndexData(); exportar() es el único
+ * método propio del módulo.
+ */
+class BitacoraController extends ReadOnlyController
 {
-    protected string $viewPath = 'audit';
+    protected string $viewPath  = 'auditoria';
     protected string $routeName = 'bitacora';
 
-    protected array $allowedRoles = ['administrador'];
-
-    protected function createModel(PDO $pdo)
+    protected function createModel(PDO $pdo): object
     {
         return new BitacoraModel($pdo);
     }
 
-    protected function extractData(array $source): array
-    {
-        return [];
-    }
-
-    protected function validate(array $data): array
-    {
-        return [];
-    }
-
-    public function index()
-    {
-        $page = max(1, (int)($_GET['page'] ?? 1));
-        $filters = $this->getFiltersFromRequest();
-
-        $registros  = $this->model->getAll($filters, $page, $this->perPage);
-        $total      = $this->model->countAll($filters);
-        $totalPages = (int) ceil($total / $this->perPage);
-        $stats      = $this->model->getStats();
-        $acciones   = $this->model->getAcciones();
-
-        $paginacion = [
-            'desde'         => $total > 0 ? (($page - 1) * $this->perPage) + 1 : 0,
-            'hasta'         => min($page * $this->perPage, $total),
-            'total'         => $total,
-            'pagina_actual' => $page,
-            'total_paginas' => $totalPages,
-        ];
-
-        $fechaDesde = $filters['desde'];
-        $fechaHasta = $filters['hasta'];
-
-        require_once __DIR__ . "/../Views/{$this->viewPath}/index.php";
-    }
-
+    /**
+     * Filtros propios del módulo: rango de fechas, acción exacta y
+     * texto libre (usuario/módulo/IP). Sobrescribe el genérico del
+     * trait, que solo maneja "search".
+     */
     protected function getFiltersFromRequest(): array
     {
         return [
             'desde'  => trim($_GET['desde'] ?? ''),
             'hasta'  => trim($_GET['hasta'] ?? ''),
             'accion' => trim($_GET['accion'] ?? ''),
+            'search' => trim($_GET['q'] ?? ''),
         ];
     }
 
-    public function exportar()
+    /**
+     * Variables extra que necesita la vista de auditoría además de
+     * $items/$paginacion/$filters: stats, acciones disponibles para el
+     * filtro y el rango de fechas activo.
+     */
+    protected function getExtraIndexData(array $items, array $filters): array
     {
-        $filters = $this->getFiltersFromRequest();
-        $registros = $this->model->getAllSinPaginar($filters);
+        $model = $this->getModel();
 
-        header('Content-Type: text/csv; charset=utf-8');
-        header('Content-Disposition: attachment; filename=bitacora.csv');
+        return [
+            'registros'  => $items,
+            'stats'      => [
+                'actividad_hoy'    => $model->countHoy(),
+                'alertas'          => $model->countAlertasSeguridad(),
+                'usuarios_activos' => $model->countUsuariosActivosHoy(),
+            ],
+            // "accion" es texto libre en la BD (no ENUM), así que las
+            // opciones del filtro salen de los valores que existen
+            // hoy en la tabla, no de una lista fija en el código.
+            'acciones'   => $model->getAccionesDisponibles(),
+            'fechaDesde' => $filters['desde'] ?? '',
+            'fechaHasta' => $filters['hasta'] ?? '',
+        ];
+    }
 
-        $output = fopen('php://output', 'w');
-        fputcsv($output, ['Fecha', 'Hora', 'Usuario', 'Login', 'Acción', 'Módulo', 'IP']);
+    /**
+     * Exporta a CSV el listado completo (sin paginar) respetando
+     * los mismos filtros activos en pantalla. Es el destino del
+     * botón "Exportar" de la vista (bitacora/exportar). Renderiza
+     * un archivo, no HTML ni JSON, por eso no usa jsonResponse()
+     * ni jsonError(): en caso de fallo cae a handleError() como
+     * cualquier flujo de página completa.
+     */
+    public function exportar(): void
+    {
+        try {
+            $filters   = $this->getFiltersFromRequest();
+            $registros = $this->getModel()->getAllForExport($filters);
 
-        foreach ($registros as $r) {
-            fputcsv($output, [
-                $r['fecha'], $r['hora'], $r['usuario'], $r['usuario_login'],
-                $r['accion_label'], $r['modulo'], $r['ip'],
-            ]);
+            header('Content-Type: text/csv; charset=UTF-8');
+            header('Content-Disposition: attachment; filename="bitacora_' . date('Y-m-d_His') . '.csv"');
+
+            $out = fopen('php://output', 'w');
+            // BOM UTF-8 para que Excel no rompa los acentos al abrir el CSV.
+            fwrite($out, "\xEF\xBB\xBF");
+            fputcsv($out, ['Fecha', 'Hora', 'Usuario', 'Usuario (login)', 'Acción', 'Módulo', 'IP']);
+
+            foreach ($registros as $r) {
+                fputcsv($out, [
+                    $r['fecha'],
+                    $r['hora'],
+                    $r['usuario'],
+                    $r['usuario_login'],
+                    $r['accion_label'],
+                    $r['modulo'],
+                    $r['ip'],
+                ]);
+            }
+
+            fclose($out);
+            exit;
+        } catch (Throwable $e) {
+            $this->handleError($e, 'Bitácora del Sistema');
         }
-
-        fclose($output);
-        exit;
     }
 }

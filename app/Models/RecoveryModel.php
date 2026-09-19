@@ -1,22 +1,12 @@
 <?php
+declare(strict_types=1);
 
-/**
- * RecoveryModel
- *
- * Encapsula la lógica de solicitudes de recuperación de acceso
- * (notificación interna al administrador). Se mantiene separado de
- * LoginModel porque este último no maneja restablecimiento de
- * contraseñas (ver docblock de LoginModel).
- */
-require_once __DIR__ . '/Model.php';
+namespace App\Models;
+
+use PDO;
 
 class RecoveryModel extends Model
 {
-    public function __construct(PDO $pdo)
-    {
-        parent::__construct($pdo);
-    }
-
     /**
      * Busca un usuario por su nombre de usuario o por cédula, para
      * validar que la solicitud de recuperación corresponda a alguien

@@ -26,7 +26,8 @@ $authTagline     = 'Por su seguridad, actualice su contraseña provisional antes
     <?php include __DIR__ . '/../partials/auth-brand-panel.php'; ?>
 
     <main class="col-12 col-lg-7 auth-split__form">
-      <section class="auth-card" aria-labelledby="resetTitle">
+      <div class="auth-split__center"> 
+        <section class="auth-card" aria-labelledby="resetTitle">
         <h1 id="resetTitle" class="auth-card__title">Nueva Contraseña</h1>
         <p class="auth-card__subtitle text-support">
           Por seguridad, debe actualizar su contraseña provisional para continuar con el acceso a su cuenta.
@@ -117,6 +118,7 @@ $authTagline     = 'Por su seguridad, actualice su contraseña provisional antes
           </a>
         </p>
       </section>
+      </div>
 
       <?php include __DIR__ . '/../partials/auth-footer.php'; ?>
     </main>

@@ -12,47 +12,202 @@ document.addEventListener('DOMContentLoaded', function () {
   initClipboardCopy();
   initAutoFilters();
   initSwalFromData();
+  initModalFocusFix();
 });
 
 function initAutoFilters() {
   document.querySelectorAll('form.data-panel__filters, form.auto-filters').forEach(function (form) {
     var searchTimer;
     var searchInput = form.querySelector('input[type="search"]');
+    var activeAbortController = null;
+    var panel = form.closest('.data-panel') || document.querySelector('.data-panel');
 
-    function applyFilters() {
+    function applyFilters(page, pushHistory, skipHistory) {
       var action = form.getAttribute('action');
       if (!action) return;
 
       var params = new URLSearchParams(new FormData(form));
-      window.location.href = action + (params.toString() ? '?' + params.toString() : '');
-    }
-
-    form.querySelectorAll('select').forEach(function (select) {
-      select.addEventListener('change', function () {
-        applyFilters();
-      });
-    });
-
-    form.querySelectorAll('input[type="date"]').forEach(function (input) {
-      input.addEventListener('change', function () {
-        applyFilters();
-      });
-    });
-
-    if (searchInput) {
-      if (searchInput.value) {
-        searchInput.focus();
-        searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
+      if (page) {
+        params.set('page', page);
+      } else {
+        params.set('page', '1');
       }
 
+      // Limpiar parámetros vacíos para que la URL sea limpia
+      var cleanParams = new URLSearchParams();
+      params.forEach(function (value, key) {
+        if (value.trim() !== '') {
+          if (key === 'page' && value === '1') return;
+          cleanParams.set(key, value.trim());
+        }
+      });
+
+      var baseUrl = action.split('?')[0];
+      var query = cleanParams.toString();
+      var targetUrl = baseUrl + (query ? '?' + query : '');
+
+      if (activeAbortController) {
+        activeAbortController.abort();
+      }
+      activeAbortController = new AbortController();
+
+      if (panel) {
+        panel.classList.add('data-panel--loading');
+      }
+
+      fetch(targetUrl, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        signal: activeAbortController.signal
+      })
+      .then(function (res) {
+        if (!res.ok) throw new Error('Error al cargar datos');
+        return res.text();
+      })
+      .then(function (html) {
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(html, 'text/html');
+
+        if (panel) {
+          // Ubicamos el MISMO form de filtros en el HTML devuelto y subimos
+          // desde ahí con closest(), en vez de tomar el primer '.data-panel'
+          // del documento: en vistas con más de un '.data-panel' (ej.
+          // catalogo/index.php, que también tiene el panel del selector de
+          // tipo de catálogo arriba), querySelector('.data-panel') podía
+          // devolver el panel equivocado y el reemplazo de body/footer
+          // fallaba en silencio.
+          var newForm = doc.querySelector('form.data-panel__filters, form.auto-filters');
+          var newPanel = newForm ? newForm.closest('.data-panel') : doc.querySelector('.data-panel');
+
+          if (newPanel) {
+            var currentBody = panel.querySelector('.data-panel__body');
+            var newBody = newPanel.querySelector('.data-panel__body');
+            if (currentBody && newBody) {
+              currentBody.innerHTML = newBody.innerHTML;
+            }
+
+            var currentFooter = panel.querySelector('.data-panel__footer');
+            var newFooter = newPanel.querySelector('.data-panel__footer');
+            if (currentFooter && newFooter) {
+              currentFooter.innerHTML = newFooter.innerHTML;
+            } else if (!currentFooter && newFooter) {
+              panel.appendChild(newFooter.cloneNode(true));
+            } else if (currentFooter && !newFooter) {
+              currentFooter.remove();
+            }
+          }
+        } else {
+          var currentTable = document.querySelector('table');
+          var newTable = doc.querySelector('table');
+          if (currentTable && newTable) {
+            var currentTbody = currentTable.querySelector('tbody');
+            var newTbody = newTable.querySelector('tbody');
+            if (currentTbody && newTbody) {
+              currentTbody.innerHTML = newTbody.innerHTML;
+            }
+          }
+        }
+
+        if (!skipHistory) {
+          if (pushHistory) {
+            window.history.pushState({ path: targetUrl }, '', targetUrl);
+          } else {
+            window.history.replaceState({ path: targetUrl }, '', targetUrl);
+          }
+        }
+
+        document.dispatchEvent(new CustomEvent('data-panel:updated', {
+          detail: { form: form, url: targetUrl, panel: panel }
+        }));
+      })
+      .catch(function (err) {
+        if (err.name === 'AbortError') return;
+        console.error('Error al aplicar filtros:', err);
+      })
+      .finally(function () {
+        if (panel) {
+          panel.classList.remove('data-panel--loading');
+        }
+      });
+    }
+
+    // Expone applyFilters para que otros scripts (p. ej. recuperacion.js
+    // tras aprobar/rechazar) puedan refrescar el panel sin recargar la
+    // página y sin perder los filtros/página actuales. skipHistory=true
+    // porque la URL ya refleja el filtro/página vigente; no hace falta
+    // volver a escribirla en el historial.
+    form.refreshDataPanel = function () {
+      var currentUrl = new URL(window.location.href);
+      var page = currentUrl.searchParams.get('page') || 1;
+      applyFilters(page, false, true);
+    };
+
+    // Evitar recarga completa de página al presionar Enter en el formulario
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      clearTimeout(searchTimer);
+      applyFilters(1, true);
+    });
+
+    // Filtros de selección inmediata
+    form.querySelectorAll('select').forEach(function (select) {
+      select.addEventListener('change', function () {
+        applyFilters(1, true);
+      });
+    });
+
+    // Filtros de fechas inmediatas
+    form.querySelectorAll('input[type="date"]').forEach(function (input) {
+      input.addEventListener('change', function () {
+        applyFilters(1, true);
+      });
+    });
+
+    // Búsqueda con debounce sin perder foco ni recargar
+    if (searchInput) {
       searchInput.addEventListener('input', function () {
         clearTimeout(searchTimer);
         searchTimer = setTimeout(function () {
-          var value = searchInput.value.trim();
-          if (value === '' || value.length >= 2) applyFilters();
-        }, 900);
+          applyFilters(1, false);
+        }, 350);
       });
     }
+
+    // Interceptar clics de paginación dentro del panel para que tampoco recarguen la página
+    if (panel) {
+      panel.addEventListener('click', function (e) {
+        var pageLink = e.target.closest('.pagination .page-link, .data-panel__footer .page-link');
+        if (!pageLink) return;
+
+        var href = pageLink.getAttribute('href');
+        if (!href || href === '#' || pageLink.closest('.disabled') || pageLink.closest('.active')) {
+          e.preventDefault();
+          return;
+        }
+
+        e.preventDefault();
+        var pageMatch = href.match(/[?&]page=(\d+)/);
+        var page = pageMatch ? pageMatch[1] : (pageLink.dataset.page || pageLink.textContent.trim());
+        if (page && !isNaN(page)) {
+          applyFilters(page, true);
+        }
+      });
+    }
+
+    // Sincronizar formulario y tabla si el usuario usa Atrás / Adelante en el navegador
+    window.addEventListener('popstate', function () {
+      var currentUrl = new URL(window.location.href);
+      form.querySelectorAll('input, select').forEach(function (field) {
+        if (!field.name) return;
+        var val = currentUrl.searchParams.get(field.name) || '';
+        if (field.type === 'checkbox' || field.type === 'radio') {
+          field.checked = (val === field.value);
+        } else {
+          field.value = val;
+        }
+      });
+      var page = currentUrl.searchParams.get('page') || 1;
+      applyFilters(page, false, true);
+    });
   });
 }
 
@@ -237,5 +392,20 @@ function initSwalFromData() {
     title: swalData.dataset.title,
     text: swalData.dataset.text,
     confirmButtonColor: '#0a1440'
+  });
+}
+
+/**
+ * Evita la advertencia de accesibilidad "Blocked aria-hidden on an
+ * element because its descendant retained focus" que lanza Bootstrap
+ * al cerrar un modal mientras el foco sigue en un elemento interno
+ * (por ejemplo el botón .btn-close). Se le quita el foco al elemento
+ * activo justo antes de que Bootstrap le ponga aria-hidden al modal.
+ */
+function initModalFocusFix() {
+  document.addEventListener('hide.bs.modal', function (event) {
+    if (document.activeElement && event.target.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
   });
 }

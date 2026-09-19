@@ -23,8 +23,9 @@ $authTagline     = 'Su solicitud será atendida por el administrador del sistema
 
     <?php include __DIR__ . '/../partials/auth-brand-panel.php'; ?>
 
-    <main class="col-12 col-lg-7 auth-split__form">
-      <section class="auth-card" aria-labelledby="recoverTitle">
+    <main class="col-12 col-lg-7 auth-split__form"> 
+      <div class="auth-split__center">
+        <section class="auth-card" aria-labelledby="recoverTitle">
         <h1 id="recoverTitle" class="auth-card__title">Recuperar Acceso</h1>
         <p class="auth-card__subtitle text-support">
           Ingrese su usuario o cédula y notificaremos al administrador.
@@ -74,6 +75,7 @@ $authTagline     = 'Su solicitud será atendida por el administrador del sistema
           </a>
         </p>
       </section>
+      </div>
 
       <?php include __DIR__ . '/../partials/auth-footer.php'; ?>
     </main>

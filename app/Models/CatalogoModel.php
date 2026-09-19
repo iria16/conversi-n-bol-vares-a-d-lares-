@@ -1,142 +1,108 @@
 <?php
 
-require_once __DIR__ . '/BaseModel.php';
+declare(strict_types=1);
+
+namespace App\Models;
+
+use App\Interfaces\Creatable;
+use App\Interfaces\Updatable;
+use App\Interfaces\Toggleable;
+use App\Interfaces\Listable;
 
 /**
- * Base para los modelos de catálogo simple (AnioEscolar, Grado, Seccion, Turno).
+ * CatalogoModel
+ * ---------------------------------------------------------------
+ * Clase abstracta base para todos los catálogos del sistema
+ * (grado, sección, turno, tipo_documento, grado_academico, título,
+ * tipo_asignación, rol, parentesco, motivo_retiro).
  *
- * Supuesto de esquema, común a las 4 tablas: id, nombre (VARCHAR),
- * estado ('ACTIVO'|'INACTIVO') — mismo patrón que Usuario.estado.
+ * Todas las tablas de catálogo comparten el mismo esquema mínimo:
+ *   <pk>   INT PK (el nombre de columna varía por tabla, ver $primaryKey)
+ *   nombre VARCHAR
+ *   estado ENUM('ACTIVO','INACTIVO')
+ *
+ * Implementa Creatable, Updatable, Toggleable y Listable acá, en la
+ * clase abstracta intermedia, y no en cada modelo concreto: como
+ * GradoModel, SeccionModel, etc. heredan de esta clase, todos pasan
+ * el instanceof correspondiente en BaseController/CrudController sin
+ * que haga falta declarar el "implements" en cada uno de los 10 archivos.
+ *
+ * NO implementa Deletable a propósito: ningún catálogo del sistema
+ * admite eliminación, solo alta, edición y activar/desactivar. Si
+ * algún catálogo puntual necesitara borrado en el futuro, ese
+ * modelo concreto podría agregar "implements Deletable" él solo,
+ * sin afectar a los demás.
  */
-abstract class CatalogoModel extends BaseModel
+abstract class CatalogoModel extends BaseModel implements Creatable, Updatable, Toggleable, Listable
 {
+    /**
+     * Nombre de la clave primaria por defecto.
+     * Los modelos hijos (ej. TurnoModel) pueden sobrescribirla si su PK difiere.
+     */
     protected string $primaryKey = 'id';
-    protected string $campoNombre = 'nombre';
-    protected string $campoEstado = 'estado';
 
+    /**
+     * Expone el nombre real de la PK de este catálogo (id_turno, id_grado, etc.)
+     * para que el controlador normalice la respuesta a la vista.
+     */
+    public function getPrimaryKey(): string
+    {
+        return $this->primaryKey;
+    }
+
+    /**
+     * La búsqueda de texto libre (parámetro search) se realiza por el campo "nombre".
+     */
     protected function searchableFields(): array
     {
-        return [$this->campoNombre];
+        return ['nombre'];
     }
 
-    // -------------------------------------------------------------
-    // LISTADO
-    // -------------------------------------------------------------
-    public function getAll(array $filters = [], int $page = 1, int $perPage = 10): array
-    {
-        [$where, $params] = $this->buildFiltersCatalogo($filters);
-
-        $sql = "SELECT {$this->primaryKey} AS id, {$this->campoNombre} AS nombre, {$this->campoEstado} AS estado
-                FROM {$this->table}";
-
-        if ($where) $sql .= " WHERE " . implode(' AND ', $where);
-        $sql .= " ORDER BY {$this->campoNombre} ASC LIMIT :limit OFFSET :offset";
-
-        $stmt = $this->pdo->prepare($sql);
-        foreach ($params as $k => $v) $stmt->bindValue($k, $v);
-        $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
-        $stmt->bindValue(':offset', ($page - 1) * $perPage, PDO::PARAM_INT);
-        $stmt->execute();
-
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-
-    public function countAll(array $filters = []): int
-    {
-        [$where, $params] = $this->buildFiltersCatalogo($filters);
-
-        $sql = "SELECT COUNT(*) FROM {$this->table}";
-        if ($where) $sql .= " WHERE " . implode(' AND ', $where);
-
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute($params);
-        return (int) $stmt->fetchColumn();
-    }
-
-    private function buildFiltersCatalogo(array $filters): array
-    {
-        $where = [];
-        $params = [];
-
-        if (!empty($filters['estado'])) {
-            $where[] = "{$this->campoEstado} = :estado";
-            $params['estado'] = strtoupper($filters['estado']); // activo -> ACTIVO
-        }
-
-        if (!empty($filters['q'])) {
-            $where[] = "{$this->campoNombre} LIKE :q";
-            $params['q'] = $filters['q'] . '%';
-        }
-
-        return [$where, $params];
-    }
-
-    // -------------------------------------------------------------
-    // ALTA (modal "Nuevo Elemento")
-    // -------------------------------------------------------------
-
-    // Cumple el contrato de BaseModel::create(array $data): bool
+    /**
+     * Intercepta la creación para garantizar que solo se envíe la columna 'nombre'
+     * a la tabla de la BD, descartando metadatos como 'tipo'.
+     */
     public function create(array $data): bool
     {
-        $resultado = $this->crearElemento($data['nombre'] ?? '');
-        return $resultado['ok'];
+        $payload = [
+            'nombre' => trim($data['nombre'] ?? ''),
+        ];
+
+        return parent::create($payload);
     }
 
-    // Versión propia de CatalogoModel: valida duplicados y devuelve
-    // el id creado o el mensaje de error, que es lo que necesita el
-    // modal "Nuevo Elemento" del controlador.
-    public function crearElemento(string $nombre): array
+    /**
+     * Intercepta la actualización para filtrar únicamente la columna 'nombre'.
+     */
+    public function update(int $id, array $data): bool
     {
-        if ($this->existeNombre($nombre)) {
-            return ['ok' => false, 'mensaje' => 'Ya existe un elemento con ese nombre.'];
-        }
+        $payload = [
+            'nombre' => trim($data['nombre'] ?? ''),
+        ];
 
-        try {
-            $sql = "INSERT INTO {$this->table} ({$this->campoNombre}, {$this->campoEstado}) VALUES (:nombre, 'ACTIVO')";
-            $this->pdo->prepare($sql)->execute(['nombre' => $nombre]);
-            return ['ok' => true, 'id' => (int) $this->pdo->lastInsertId()];
-        } catch (Throwable $e) {
-            error_log(static::class . '::crearElemento(): ' . $e->getMessage());
-            return ['ok' => false, 'mensaje' => 'No se pudo guardar el elemento.'];
-        }
+        return parent::update($id, $payload);
     }
 
-    private function existeNombre(string $nombre, ?int $excluirId = null): bool
+    /**
+     * Verifica si ya existe un elemento con ese nombre dentro del mismo catálogo
+     * (comparación case-insensitive), evitando duplicados al crear o editar.
+     *
+     * @param string   $nombre    Nombre a verificar.
+     * @param int|null $excludeId ID a excluir en edición.
+     */
+    public function existeNombre(string $nombre, ?int $excludeId = null): bool
     {
-        $sql = "SELECT COUNT(*) FROM {$this->table} WHERE {$this->campoNombre} = :nombre";
-        $params = ['nombre' => $nombre];
+        $sql = "SELECT COUNT(*) FROM {$this->table} WHERE LOWER(nombre) = LOWER(:nombre)";
+        $params = ['nombre' => trim($nombre)];
 
-        if ($excluirId !== null) {
-            $sql .= " AND {$this->primaryKey} != :excluirId";
-            $params['excluirId'] = $excluirId;
+        if ($excludeId !== null && $excludeId > 0) {
+            $sql .= " AND {$this->primaryKey} != :excludeId";
+            $params['excludeId'] = $excludeId;
         }
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
+
         return (int) $stmt->fetchColumn() > 0;
-    }
-
-    // -------------------------------------------------------------
-    // EDICIÓN (ícono lápiz)
-    // -------------------------------------------------------------
-    public function updateNombre(int $id, string $nombre): bool
-    {
-        if ($this->existeNombre($nombre, $id)) return false;
-
-        $sql = "UPDATE {$this->table} SET {$this->campoNombre} = :nombre WHERE {$this->primaryKey} = :id";
-        return $this->pdo->prepare($sql)->execute(['nombre' => $nombre, 'id' => $id]);
-    }
-
-    // -------------------------------------------------------------
-    // ACTIVAR / DESACTIVAR (switch en cada fila)
-    // -------------------------------------------------------------
-    public function toggleEstado(int $id): array
-    {
-        $sql = "UPDATE {$this->table}
-                SET {$this->campoEstado} = IF({$this->campoEstado} = 'ACTIVO', 'INACTIVO', 'ACTIVO')
-                WHERE {$this->primaryKey} = :id";
-
-        $ok = $this->pdo->prepare($sql)->execute(['id' => $id]);
-        return ['ok' => $ok];
     }
 }

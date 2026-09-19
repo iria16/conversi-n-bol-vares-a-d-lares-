@@ -31,7 +31,7 @@ if (!function_exists('sigde_rol_clave')) {
 
         return match ($rol) {
             'administrador', 'administrator' => 'admin',
-            'secretaria'                   => 'secretaria',
+            'secretaria'                    => 'secretaria',
             'director', 'directora'        => 'directivo',
             default                         => $rol,
         };
@@ -54,14 +54,7 @@ if (!function_exists('sigde_rol_etiqueta')) {
 
 if (!function_exists('sigde_nav_sections')) {
     /**
-     * Menú lateral filtrado por rol. Los href "#" son placeholders de diseño
-     * hasta que existan las rutas reales.
-     *
-     * Los items pueden declarar su propio 'roles'; si no lo declaran,
-     * heredan los roles de la sección (útil cuando toda la sección es
-     * exclusiva de un solo rol, como "Usuarios"). Esto permite que una
-     * misma sección (ej. "Reportes") muestre ítems distintos según el rol
-     * sin duplicar la sección completa.
+     * Menú lateral filtrado por rol.
      *
      * @return list<array{label:string,items:list<array{id:string,label:string,icon:string,href:string}>}>
      */
@@ -69,7 +62,6 @@ if (!function_exists('sigde_nav_sections')) {
     {
         $rol = sigde_rol_clave($rol);
         $dashboardHref = BASE_URL . 'dashboard/' . ($rol !== '' ? $rol : 'index');
-
 
         $todas = [
             [
@@ -83,19 +75,39 @@ if (!function_exists('sigde_nav_sections')) {
                 'label' => 'Usuarios',
                 'roles' => ['admin'],
                 'items' => [
-                    ['id' => 'cuentas', 'label' => 'Cuentas de usuario', 'icon' => 'bi-people', 'href' => BASE_URL . 'userAccount/index'],
-                    ['id' => 'recuperacion', 'label' => 'Recuperación de acceso', 'icon' => 'bi-key', 'href' => BASE_URL .'accessRecovery/index'],
+                    ['id' => 'cuentas', 'label' => 'Cuentas de usuario', 'icon' => 'bi-people', 'href' => BASE_URL . 'cuentaUsuario/index'],
+                    ['id' => 'recuperacion', 'label' => 'Recuperación de acceso', 'icon' => 'bi-key', 'href' => BASE_URL . 'recuperacionAcceso/index'],
                 ],
             ],
             [
                 'label' => 'Gestión de estudiantes',
                 'roles' => ['secretaria'],
                 'items' => [
-                    ['id' => 'estudiantes',   'label' => 'Estudiantes',   'icon' => 'bi-mortarboard',      'href' => BASE_URL .'estudiantes/index'],
                     ['id' => 'inscripcion',   'label' => 'Inscripción',   'icon' => 'bi-person-plus',      'href' => BASE_URL . 'inscripciones/index'],
                     ['id' => 'ratificacion',  'label' => 'Ratificación',  'icon' => 'bi-arrow-repeat',     'href' => '#'],
                     ['id' => 'retiro',        'label' => 'Retiro',        'icon' => 'bi-box-arrow-right',  'href' => '#'],
                     ['id' => 'egreso',        'label' => 'Egreso',        'icon' => 'bi-mortarboard-fill', 'href' => '#'],
+                ],
+            ],
+            [
+                'label' => 'Mi sección',
+                'roles' => ['docente'],
+                'items' => [
+                    ['id' => 'mi-seccion-estudiantes', 'label' => 'Estudiantes', 'icon' => 'bi-mortarboard', 'href' => BASE_URL . 'estudiantes/index'],
+                ],
+            ],
+            [
+                'label' => 'Consulta académica',
+                'roles' => ['coordinador','secretaria'],
+                'items' => [
+                    ['id' => 'estudiantes', 'label' => 'Estudiantes', 'icon' => 'bi-mortarboard', 'href' => BASE_URL . 'estudiantes/index'],
+                ],
+            ],
+            [
+                'label' => 'Consultas',
+                'roles' => ['docente'],
+                'items' => [
+                    ['id' => 'consultas-estudiantes', 'label' => 'Estudiantes', 'icon' => 'bi-search', 'href' => BASE_URL . 'estudiantes/index'],
                 ],
             ],
             [
@@ -121,28 +133,31 @@ if (!function_exists('sigde_nav_sections')) {
                 ],
             ],
             [
-                'label' => 'Configuración académica',
-                'roles' => ['directivo'],
+                'label' => 'Estructura académica',
+                'roles' => ['coordinador'],
                 'items' => [
-                    ['id' => 'anios-escolares', 'label' => 'Años Escolares', 'icon' => 'bi-calendar3', 'href' => BASE_URL . 'academicYear/index'],
-                    ['id' => 'estructura-academica', 'label' => 'Estructura Académica', 'icon' => 'bi-diagram-3', 'href' => BASE_URL . 'academicStructure/index'],
-                    ['id' => 'asignacion-docente', 'label' => 'Asignación Docente', 'icon' => 'bi-person-video3', 'href' => BASE_URL . 'teacherAssignment/index'],
+                    ['id' => 'estructura-academica', 'label' => 'Estructura Académica', 'icon' => 'bi-diagram-3',     'href' => BASE_URL . 'academicStructure/index'],
+                    ['id' => 'asignacion-docente',   'label' => 'Asignación Docente',   'icon' => 'bi-person-video3', 'href' => BASE_URL . 'teacherAssignment/index'],
                 ],
             ],
             [
-                'label' => 'Académico',
-                'roles' => ['docente', 'coordinador'],
+                'label' => 'Configuración académica',
+                'roles' => ['directivo'],
                 'items' => [
-                    ['id' => 'secciones', 'label' => 'Mis secciones', 'icon' => 'bi-collection', 'href' => '#'],
+                    ['id' => 'anios-escolares',      'label' => 'Años Escolares',      'icon' => 'bi-calendar3',       'href' => BASE_URL . 'academicYear/index'],
+                    ['id' => 'estructura-academica', 'label' => 'Estructura Académica', 'icon' => 'bi-diagram-3',     'href' => BASE_URL . 'academicStructure/index'],
+                    ['id' => 'asignacion-docente',   'label' => 'Asignación Docente',   'icon' => 'bi-person-video3', 'href' => BASE_URL . 'teacherAssignment/index'],
                 ],
             ],
             [
                 'label' => 'Reportes',
                 'roles' => ['directivo', 'coordinador'],
                 'items' => [
-                    ['id' => 'personal-docente', 'label' => 'Personal Docente', 'icon' => 'bi-person-lines-fill', 'href' => '#', 'roles' => ['directivo']],
-                    ['id' => 'estadistico-general', 'label' => 'Estadístico General', 'icon' => 'bi-bar-chart', 'href' => '#', 'roles' => ['directivo']],
-                    ['id' => 'expedientes', 'label' => 'Expediente personal', 'icon' => 'bi-folder2-open', 'href' => '#', 'roles' => ['coordinador']],
+                    ['id' => 'personal-docente',       'label' => 'Personal Docente',       'icon' => 'bi-person-lines-fill', 'href' => '#', 'roles' => ['directivo']],
+                    ['id' => 'estadistico-general',     'label' => 'Estadístico General',     'icon' => 'bi-bar-chart',        'href' => '#', 'roles' => ['directivo', 'coordinador']],
+                    ['id' => 'listado-estudiantes',     'label' => 'Listado de Estudiantes', 'icon' => 'bi-journal-text',     'href' => '#', 'roles' => ['coordinador']],
+                    ['id' => 'distribucion-academica',  'label' => 'Distribución Académica',  'icon' => 'bi-diagram-2',        'href' => '#', 'roles' => ['coordinador']],
+                    ['id' => 'expedientes',             'label' => 'Expediente personal',     'icon' => 'bi-folder2-open',     'href' => '#', 'roles' => ['coordinador']],
                 ],
             ],
             [

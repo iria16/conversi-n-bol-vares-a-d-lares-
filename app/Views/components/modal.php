@@ -23,7 +23,7 @@ $modalCentered = $modalCentered ?? true;
 $modalHeaderExtra = $modalHeaderExtra ?? ''; // HTML opcional entre header y body (ej. stepper)
 
 $dialogClass = 'modal-dialog';
-if (in_array($modalSize, ['sm', 'lg', 'xl'], true)) {
+if (in_array($modalSize, ['sm', 'md', 'lg', 'xl'], true)) {
     $dialogClass .= ' modal-' . $modalSize;
 }
 if ($modalCentered) {
