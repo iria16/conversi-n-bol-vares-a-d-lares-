@@ -1,25 +1,26 @@
 <?php
+
 namespace App\Traits;
+
 /**
- * Trait: AvatarTrait
- * Genera las iniciales y el color de avatar para un usuario, a partir de su
- * nombre/apellido y rol, cuando no tiene una foto asignada.
  *
- * Antes esta lógica estaba duplicada en CuentaUsuarioModel y
- * RecuperacionAccesoModel, cada uno con su propia regla de color — lo que
- * hacía que el MISMO usuario apareciera con un color de avatar distinto
- * según la pantalla (primary en Cuentas, dark en Recuperación de Acceso).
- *
- * Cualquier Model que necesite mostrar un avatar con iniciales debe usar
- * este trait en vez de reimplementar la lógica.
+ * @author Logística
+ * @package App\Traits
  */
 trait AvatarTrait
 {
     /**
+     * Arma las iniciales del avatar: primera letra del nombre + primera letra
+     * del apellido, en mayúsculas. Si ninguno de los dos tiene texto, usa la
+     * primera letra del texto de respaldo.
+     *
      * @param string|null $nombre    primer_nombre de la persona
      * @param string|null $apellido  primer_apellido de la persona
      * @param string|null $fallback  texto de respaldo si no hay nombre/apellido
      *                               (normalmente nombre_usuario)
+     *
+     * @return string Una o dos letras en mayúsculas (por ejemplo "MP"); si todo
+     *                viene vacío, la inicial del respaldo, o "U" por defecto.
      */
     protected function generarIniciales(?string $nombre, ?string $apellido, ?string $fallback = 'U'): string
     {
@@ -35,6 +36,13 @@ trait AvatarTrait
      * esta regla — si se agregan más roles con color propio (ej. docente,
      * coordinador), se ajusta aquí una sola vez y se propaga a todo el
      * sistema.
+     *
+     * Hoy solo distingue dos casos: administrador y todos los demás.
+     *
+     * @param string|null $rol Nombre o clave del rol (sin distinguir mayúsculas).
+     *
+     * @return string Variante de color del componente de avatar: 'primary'
+     *                para admin/administrador, 'success' para cualquier otro.
      */
     protected function colorPorRol(?string $rol): string
     {
@@ -58,6 +66,10 @@ trait AvatarTrait
      *
      * @return array{tipo: string, foto: ?string, iniciales: ?string, avatar_color: ?string}
      *         tipo = 'foto' | 'iniciales'
+     *
+     * Con tipo 'foto' vienen `foto` (ruta lista para BASE_URL . $foto) y los
+     * otros dos en null. Con tipo 'iniciales' viene lo contrario. Las cuatro
+     * claves existen siempre, así la vista puede leerlas sin isset().
      */
     protected function resolverAvatar(?string $foto, ?string $nombre, ?string $apellido, ?string $rol, ?string $fallback = 'U'): array
     {

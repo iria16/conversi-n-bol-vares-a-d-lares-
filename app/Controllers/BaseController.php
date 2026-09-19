@@ -151,7 +151,7 @@ abstract class BaseController
      * Emite un payload JSON sin la estructura estandarizada.
      *
      * Lo uso cuando el consumidor espera un formato propio (por ejemplo
-     * librerías de terceros como DataTables) y no el envoltorio ok/data/message.
+     * librerías de terceros como DataTables) y no el envoltorio ok/mensaje/data.
      *
      * @param array $payload Contenido exacto a serializar.
      * @param int   $code    Código HTTP de la respuesta.

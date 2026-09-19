@@ -34,7 +34,7 @@ use Throwable;
  * front controller (public/index.php), o el router la rechaza.
  *
  * Formato de respuesta: las acciones AJAX responden con jsonResponse()
- * ({ok, data, message}). La excepción es store(), que devuelve con
+ * ({ok, mensaje, data}). La excepción es store(), que devuelve con
  * jsonRaw() lo que retorne el modelo tal cual, porque el front necesita
  * ese formato para el modal de credenciales.
  *
