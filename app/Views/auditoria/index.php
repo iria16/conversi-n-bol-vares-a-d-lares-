@@ -101,14 +101,21 @@ ob_start();
   $panelSearchPlaceholder = 'Buscar por usuario, módulo o IP...';
 
   // ---------- Data panel: colgroup ----------
+  // Anchos en px, no en %: _tables.scss fija .table en min-width: 720px y, en
+  // móvil, un % se calcula sobre esos 720px. Con 16% la columna Acción medía
+  // ~115px y su badge (nowrap, ~122px) se salía sobre la columna Módulo.
+  // Con table-layout: fixed la tabla crece hasta la suma de las columnas
+  // (scroll horizontal en móvil) y en escritorio el espacio sobrante se
+  // reparte entre ellas.
+  // Orden: Fecha y Hora / Usuario / Acción / Módulo / Dirección IP.
   ob_start();
   ?>
   <colgroup>
-    <col style="width: 18%;">
-    <col style="width: 26%;">
-    <col style="width: 16%;">
-    <col style="width: 22%;">
-    <col style="width: 18%;">
+    <col style="width: 120px;">
+    <col style="width: 220px;">
+    <col style="width: 170px;">
+    <col style="width: 170px;">
+    <col style="width: 150px;">
   </colgroup>
   <?php
   $panelColgroup = ob_get_clean();

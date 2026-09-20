@@ -239,7 +239,7 @@ function pintarDetalleSolicitud(modalDetalleEl, d) {
   };
 
   set('detalleNombre', d.nombre);
-  set('detalleUsuario', d.usuario ? '@' + d.usuario : '—');
+  set('detalleUsuario', d.usuario ? d.usuario : '—');
   set('detalleFecha', ((d.fecha || '') + ' ' + (d.hora || '')).trim() || '—');
   set('detalleFechaAtencion', d.fecha_atencion);
   set('detalleAdmin', d.admin_atendio);

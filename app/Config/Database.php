@@ -8,12 +8,11 @@ use PDOException;
 class Database {
 
     // Atributos privados para configuracion de CLASE PDO
-    private $host    = 'aws-0-us-east-2.pooler.supabase.com';
-    private $port    = '6543'; // Puerto del Connection Pooler de Supabase
-    private $db      = 'postgres';
-    private $user    = 'postgres.rluyudkdwvilzytwglac';
-    private $pass    = 'Iriamar2026.';
-    private $charset = 'utf8';
+    private $host = '127.0.0.1';
+    private $db   = 'sidge';  
+    private $user = 'root';
+    private $pass = '25863136';
+    private $charset = 'utf8mb4';
     private $pdo;
 
     public function __construct() {
@@ -21,9 +20,10 @@ class Database {
     }
 
     // Metodo privado que instancia la Clase PDO
+
     private function connect() {
-       $dsn = "pgsql:host={$this->host};port={$this->port};dbname={$this->db};options='--client_encoding={$this->charset}'";
-        
+        $dsn = "mysql:host={$this->host};dbname={$this->db};charset={$this->charset}";
+
         // Opciones de configuracion de PDO
         $options = [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
@@ -42,4 +42,5 @@ class Database {
     public function getConnection() {
         return $this->pdo;
     }
-}
+} 
+

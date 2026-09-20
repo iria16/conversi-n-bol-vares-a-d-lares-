@@ -325,7 +325,10 @@
 // ---------- Modales anidados (wizard -> modal título/institución) ----------
 // Cuando el wizard tiene un .app-modal hijo abierto encima, el backdrop
 // y el modal secundario se apilan correctamente.
-body.modal-open .modal-backdrop:nth-of-type(2) {
+// El selector "~" apunta solo a un backdrop que venga DESPUÉS de otro
+// (el del modal hijo). Con un único modal abierto no aplica, así que su
+// backdrop conserva el z-index normal de Bootstrap y queda debajo del modal.
+body.modal-open .modal-backdrop ~ .modal-backdrop {
   z-index: 1056;
 }
 

@@ -170,13 +170,16 @@ ob_start();
   include __DIR__ . '/../../components/data-panel.php';
 ?>
 
-<!-- ===================== Modales ===================== -->
 <?php
+$pageContent = ob_get_clean();
+
+// ---------- Modales ----------
+// Se capturan aparte de $pageContent: layouts/app.php los imprime bajo <body>,
+// fuera de .app-shell, para que no hereden overflow ni apilamiento del cascarón.
+ob_start();
 require_once __DIR__ . '/modals/create-modal.php';
 require_once __DIR__ . '/modals/edit-modal.php';
-?>
+$pageModals = ob_get_clean();
 
-<?php
-$pageContent  = ob_get_clean();
 $extraScripts = ['/js/catalogo.js'];
 include __DIR__ . '/../../layouts/app.php';

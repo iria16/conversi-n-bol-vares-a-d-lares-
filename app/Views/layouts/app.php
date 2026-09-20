@@ -11,6 +11,10 @@
  * - string $pageContent       HTML del contenido principal (capturado con ob_start)
  *
  * Opcional:
+ * - string $pageModals        HTML de los modales de la vista (capturado con ob_start).
+ *                             Se imprime directamente bajo <body>, FUERA de .app-shell,
+ *                             para que los modales no hereden overflow ni apilamiento
+ *                             del cascarón (recomendación de Bootstrap).
  * - array $extraScripts
  * - bool  $tieneNotificaciones
  */
@@ -26,6 +30,7 @@ if (!in_array('/js/app-shell.js', $extraScripts, true)) {
     $extraScripts[] = '/js/app-shell.js';
 }
 $pageContent = $pageContent ?? '';
+$pageModals  = $pageModals ?? '';
 
 // Notificaciones solo para admin, secretaria y directivo
 $tieneNotificaciones = in_array($rolSesion, ['admin', 'secretaria', 'directivo']);
@@ -52,6 +57,8 @@ $tieneNotificaciones = in_array($rolSesion, ['admin', 'secretaria', 'directivo']
       <?php include __DIR__ . '/../partials/app-footer.php'; ?>
     </div>
   </div>
+
+  <?php echo $pageModals; ?>
 
   <?php include __DIR__ . '/../partials/scripts.php'; ?>
 
