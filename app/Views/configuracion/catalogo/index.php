@@ -55,7 +55,7 @@ ob_start();
           <select id="tipoCatalogo" name="tipo" class="form-select form-select-sm">
             <?php foreach ($tiposCatalogo as $tipo): ?>
               <option value="<?= htmlspecialchars($tipo['clave']) ?>" <?= $tipo['clave'] === $catalogoActivo ? 'selected' : '' ?>>
-                <?= htmlspecialchars($tipo['nombre']) ?> (<?= (int) $tipo['total'] ?>)
+                <?= htmlspecialchars($tipo['nombre']) ?>
               </option>
             <?php endforeach; ?>
           </select>
@@ -69,7 +69,9 @@ ob_start();
             <div class="stat-card__label mb-0">Catálogo activo</div>
             <div class="content-card__title mb-0"><?= htmlspecialchars($catalogoInfo['nombre']) ?></div>
           </div>
-          <span class="badge bg-primary-subtle text-primary rounded-pill px-3 py-2 fw-semibold">
+          <span id="catalogoTotalBadge"
+                class="badge bg-primary-subtle text-primary rounded-pill px-3 py-2 fw-semibold"
+                data-total="<?= (int) $catalogoInfo['total'] ?>">
             <?= (int) $catalogoInfo['total'] ?> registro<?= $catalogoInfo['total'] === 1 ? '' : 's' ?>
           </span>
         </div>
@@ -100,6 +102,23 @@ ob_start();
   $panelSearchValue       = $filters['q'] ?? '';
   $panelSearchPlaceholder = 'Buscar por nombre...';
 
+  // ---------- Data panel: colgroup ----------
+  // Sin <colgroup>, table-layout: fixed reparte el ancho en partes iguales
+  // (720px / 3 = 240px) y Nombre, la columna con más texto, quedaría igual de
+  // angosta que Estado o Acciones. Anchos en px (suman el min-width: 720px de
+  // _tables.scss): en móvil hay scroll horizontal y en escritorio el espacio
+  // sobrante se reparte entre las columnas.
+  // Orden: Nombre / Estado / Acciones.
+  ob_start();
+  ?>
+  <colgroup>
+    <col style="width: 380px;">
+    <col style="width: 170px;">
+    <col style="width: 170px;">
+  </colgroup>
+  <?php
+  $panelColgroup = ob_get_clean();
+
   // ---------- Data panel: thead ----------
   ob_start();
   ?>
@@ -112,8 +131,14 @@ ob_start();
   $panelTableHead = ob_get_clean();
 
   // ---------- Data panel: tbody ----------
+  // id="catalogoTablaBody": permite que catalogo.js ubique el <tbody> con
+  // certeza (por ejemplo para insertar la fila de "sin resultados" cuando,
+  // tras un toggle de estado con un filtro aplicado, la última fila visible
+  // se remueve dinámicamente sin recargar la página).
   ob_start();
-  foreach ($elementos as $el):
+  ?>
+  <tbody id="catalogoTablaBody">
+  <?php foreach ($elementos as $el):
     // La BD guarda el estado en MAYÚSCULA ('ACTIVO' / 'INACTIVO'),
     // ver comentario de CatalogoModel. strtoupper() evita que esto
     // se rompa si algún día se guarda distinto.
@@ -134,7 +159,8 @@ ob_start();
                   class="action-btn action-btn--edit editar-elemento"
                   data-elemento-id="<?= (int) $el['id'] ?>"
                   data-elemento-nombre="<?= htmlspecialchars($el['nombre']) ?>"
-                  title="Editar elemento">
+                  title="<?= $esInactivo ? 'No se puede editar un elemento inactivo' : 'Editar elemento' ?>"
+                  <?= $esInactivo ? 'disabled' : '' ?>>
             <i class="bi bi-pencil" aria-hidden="true"></i>
           </button>
           <div class="form-check form-switch table-switch mb-0" title="<?= $esInactivo ? 'Activar' : 'Desactivar' ?> elemento">
@@ -151,12 +177,13 @@ ob_start();
   <?php endforeach; ?>
 
   <?php if (empty($elementos)): ?>
-    <tr>
+    <tr class="catalogo-empty-row">
       <td colspan="3" class="text-center text-support py-4">
         No se encontraron elementos con los filtros seleccionados.
       </td>
     </tr>
   <?php endif; ?>
+  </tbody>
   <?php
   $panelTableBody = ob_get_clean();
 

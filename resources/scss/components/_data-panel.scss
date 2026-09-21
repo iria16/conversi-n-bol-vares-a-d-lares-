@@ -183,6 +183,16 @@
     color: $danger;
     background: rgba($danger, 0.08);
   }
+
+  &:disabled,
+  &[disabled],
+  &.disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    pointer-events: none;
+    background: transparent !important;
+    color: $secondary !important;
+  }
 }
 
 .data-panel__footer {

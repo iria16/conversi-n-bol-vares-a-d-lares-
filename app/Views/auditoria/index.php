@@ -77,10 +77,12 @@ ob_start();
 
   ob_start();
   ?>
-  <div class="d-flex align-items-center gap-2">
+  <div class="d-flex flex-column flex-sm-row align-items-sm-center gap-2">
     <label for="filtroDesde" class="visually-hidden">Desde</label>
     <input type="date" id="filtroDesde" name="desde" class="form-control" value="<?= htmlspecialchars($fechaDesde ?? '') ?>">
-    <span class="text-support">a</span>
+
+    <span class="text-support text-center d-none d-sm-inline">a</span>
+
     <label for="filtroHasta" class="visually-hidden">Hasta</label>
     <input type="date" id="filtroHasta" name="hasta" class="form-control" value="<?= htmlspecialchars($fechaHasta ?? '') ?>">
   </div>

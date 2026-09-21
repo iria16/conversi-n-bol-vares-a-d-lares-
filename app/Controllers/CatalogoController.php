@@ -19,11 +19,15 @@ use Throwable;
  * Cómo funciona:
  *  - El catálogo activo se decide por el parámetro `tipo` (GET o POST).
  *    Si viene vacío o no existe en CATALOGOS, uso el primero de la lista.
- *  - Todos los catálogos comparten el mismo formulario y las mismas reglas:
- *    un solo campo `nombre`, capitalizado y validado igual para todos.
+ *  - Todos los catálogos comparten el mismo formulario y las mismas reglas
+ *    de validación: un solo campo `nombre`. Lo que sí varía por catálogo es
+ *    el formato de capitalización (ver 'formato' en CATALOGOS): 'titulo'
+ *    para nombres cortos ("Matutino") y 'oracion' para frases largas
+ *    ("Autorización del consejo de protección"), donde Title Case se ve
+ *    forzado.
  *  - Para agregar un catálogo nuevo basta con: crear su modelo en
- *    App\Models, añadir una entrada en CATALOGOS y (si aplica) registrar
- *    el tipo en el whitelist del router.
+ *    App\Models, añadir una entrada en CATALOGOS (incluyendo 'formato')
+ *    y (si aplica) registrar el tipo en el whitelist del router.
  *
  * Requisitos de cada modelo de catálogo (los asumo, no los verifico en tiempo
  * de ejecución salvo donde se indica):
@@ -56,22 +60,27 @@ class CatalogoController extends CrudController
      *  - nombre:     etiqueta que ve el usuario en el selector de catálogos.
      *  - icono:      clase de Bootstrap Icons para ese catálogo.
      *  - modelClass: nombre de la clase en App\Models (sin namespace).
+     *  - formato:    'titulo' (cada palabra capitalizada, vía
+     *                capitalizarTitulo()) o 'oracion' (solo la primera letra,
+     *                vía capitalizarOracion()). Usar 'oracion' en catálogos
+     *                cuyos valores suelen ser frases de varias palabras
+     *                (tipo_documento, motivo_retiro); 'titulo' es el default
+     *                para valores cortos de una o dos palabras.
      *
      * Como el nombre de clase se arma dinámicamente en instantiateModel(),
      * esta lista funciona también como whitelist: solo se puede instanciar
      * lo que esté aquí.
      */
     private const CATALOGOS = [
-        'grado'           => ['nombre' => 'Grado',              'icono' => 'bi-mortarboard',       'modelClass' => 'GradoModel'],
-        'seccion'         => ['nombre' => 'Sección',            'icono' => 'bi-diagram-3',          'modelClass' => 'SeccionModel'],
-        'turno'           => ['nombre' => 'Turno',              'icono' => 'bi-clock',              'modelClass' => 'TurnoModel'],
-        'tipo_documento'  => ['nombre' => 'Tipo de Documento',  'icono' => 'bi-file-earmark-text',  'modelClass' => 'TipoDocumentoModel'],
-        'grado_academico' => ['nombre' => 'Grado Académico',    'icono' => 'bi-award',              'modelClass' => 'GradoAcademicoModel'],
-        'titulo'          => ['nombre' => 'Título',             'icono' => 'bi-person-badge',       'modelClass' => 'TituloModel'],
-        'tipo_asignacion' => ['nombre' => 'Tipo de Asignación', 'icono' => 'bi-briefcase',          'modelClass' => 'TipoAsignacionModel'],
-        'rol'             => ['nombre' => 'Rol',                'icono' => 'bi-shield-lock',        'modelClass' => 'RolModel'],
-        'parentesco'      => ['nombre' => 'Parentesco',         'icono' => 'bi-people',              'modelClass' => 'ParentescoModel'],
-        'motivo_retiro'   => ['nombre' => 'Motivo de Retiro',   'icono' => 'bi-box-arrow-right',    'modelClass' => 'MotivoRetiroModel'],
+        'grado'           => ['nombre' => 'Grado',              'icono' => 'bi-mortarboard',       'modelClass' => 'GradoModel',          'formato' => 'titulo'],
+        'seccion'         => ['nombre' => 'Sección',            'icono' => 'bi-diagram-3',          'modelClass' => 'SeccionModel',        'formato' => 'titulo'],
+        'turno'           => ['nombre' => 'Turno',              'icono' => 'bi-clock',              'modelClass' => 'TurnoModel',          'formato' => 'titulo'],
+        'tipo_documento'  => ['nombre' => 'Tipo de Documento',  'icono' => 'bi-file-earmark-text',  'modelClass' => 'TipoDocumentoModel',  'formato' => 'oracion'],
+        'grado_academico' => ['nombre' => 'Grado Académico',    'icono' => 'bi-award',              'modelClass' => 'GradoAcademicoModel', 'formato' => 'titulo'],
+        'tipo_asignacion' => ['nombre' => 'Tipo de Asignación', 'icono' => 'bi-briefcase',          'modelClass' => 'TipoAsignacionModel', 'formato' => 'titulo'],
+        'rol'             => ['nombre' => 'Rol',                'icono' => 'bi-shield-lock',        'modelClass' => 'RolModel',            'formato' => 'titulo'],
+        'parentesco'      => ['nombre' => 'Parentesco',         'icono' => 'bi-people',              'modelClass' => 'ParentescoModel',     'formato' => 'titulo'],
+        'motivo_retiro'   => ['nombre' => 'Motivo de Retiro',   'icono' => 'bi-box-arrow-right',    'modelClass' => 'MotivoRetiroModel',   'formato' => 'oracion'],
     ];
 
     /**
@@ -269,19 +278,30 @@ class CatalogoController extends CrudController
     /**
      * Extrae y normaliza los datos del formulario (gancho de CrudController).
      *
-     * El nombre se capitaliza acá (capitalizarTitulo(), heredado de
-     * TextoTrait) antes de validar y guardar, así que tanto store()
-     * como update() —ambos parten de extractData()— quedan cubiertos
-     * sin duplicar la lógica. "licenciado en informatica" se guarda
-     * como "Licenciado en Informática".
+     * El nombre se capitaliza acá antes de validar y guardar, así que tanto
+     * store() como update() —ambos parten de extractData()— quedan cubiertos
+     * sin duplicar la lógica. El estilo de capitalización depende del
+     * catálogo activo (ver 'formato' en CATALOGOS):
+     *  - 'titulo'  → capitalizarTitulo() (TextoTrait): cada palabra de
+     *    contenido en mayúscula. Pensado para valores cortos, p. ej.
+     *    "licenciado en informatica" → "Licenciado en Informática".
+     *  - 'oracion' → capitalizarOracion() (TextoTrait): solo la primera
+     *    letra en mayúscula. Pensado para frases largas, donde Title Case
+     *    se ve forzado, p. ej. "autorización del consejo de protección" →
+     *    "Autorización del consejo de protección".
      *
      * @param array $source Normalmente $_POST.
      * @return array{nombre: string}
      */
     protected function extractData(array $source): array
     {
+        $nombre  = trim($source['nombre'] ?? '');
+        $formato = self::CATALOGOS[$this->catalogoActivo]['formato'] ?? 'titulo';
+
         return [
-            'nombre' => $this->capitalizarTitulo(trim($source['nombre'] ?? '')),
+            'nombre' => $formato === 'oracion'
+                ? $this->capitalizarOracion($nombre)
+                : $this->capitalizarTitulo($nombre),
         ];
     }
 
@@ -357,12 +377,17 @@ class CatalogoController extends CrudController
         }
 
         try {
+            $itemActual = method_exists($model, 'getById') ? $model->getById($id) : null;
+            if ($itemActual && isset($itemActual['estado']) && strtoupper((string)$itemActual['estado']) === 'INACTIVO') {
+                $this->jsonResponse(false, null, 'No se puede modificar un elemento de catálogo inactivo. Debe activarlo primero.', 422);
+            }
+
             $model->update($id, $data);
         } catch (Throwable $e) {
             $this->jsonError($e, static::class);
         }
 
-        // Se devuelve $data (ya pasado por capitalizarTitulo() en
+        // Se devuelve $data (ya pasado por el formato de capitalización de
         // extractData()) para que el frontend pueda pintar la fila con
         // el nombre normalizado sin recargar la página; si solo se
         // devolviera null, catalogo.js quedaría obligado a usar el

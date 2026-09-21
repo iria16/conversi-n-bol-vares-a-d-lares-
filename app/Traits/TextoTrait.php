@@ -18,8 +18,8 @@ trait TextoTrait
     /**
      * Capitaliza cada palabra de un texto, dejando en minúscula los
      * conectores comunes (salvo cuando son la primera palabra).
-     * Pensado para nombres de catálogo como "Licenciado en Informática"
-     * o "Director de Área".
+     * Pensado para nombres de catálogo cortos, de una o pocas palabras,
+     * como "Matutino" o "Director de Área".
      */
     protected function capitalizarTitulo(string $texto): string
     {
@@ -41,5 +41,25 @@ trait TextoTrait
         }
 
         return implode(' ', $palabras);
+    }
+
+    /**
+     * Pone en mayúscula solo la primera letra del texto; el resto en
+     * minúscula. Es el estilo natural en español para frases/títulos
+     * largos ("Autorización del consejo de protección"), a diferencia de
+     * capitalizarTitulo() que capitaliza cada palabra de contenido
+     * (estilo inglés) y se ve forzado en frases de varias palabras.
+     */
+    protected function capitalizarOracion(string $texto): string
+    {
+        $texto = trim(mb_strtolower($texto, 'UTF-8'));
+        if ($texto === '') {
+            return '';
+        }
+
+        $primera = mb_substr($texto, 0, 1, 'UTF-8');
+        $resto   = mb_substr($texto, 1, null, 'UTF-8');
+
+        return mb_strtoupper($primera, 'UTF-8') . $resto;
     }
 }

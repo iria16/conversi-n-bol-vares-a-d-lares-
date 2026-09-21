@@ -1,90 +1,88 @@
 <?php
 /**
- * Vista: usuarios/cuentas/index.php
- * Gestión de Cuentas de Usuario — listado, filtros y accesos rápidos.
+ * Vista: usuarios/recuperacion/index.php
+ * Gestión de Recuperación de Acceso — listado de solicitudes de
+ * restablecimiento de contraseña, con filtro por estado y acciones
+ * rápidas (aprobar / rechazar / ver detalle).
  *
  * Espera del controlador:
- * - array $stats                 ['total','activas','inactivas','tendencia','porcentaje_activas','porcentaje_inactivas']
- * - array $usuarios              cada uno: ['id','id_rol','nombre','nombre_usuario','iniciales',
- *                                 'avatar_color','avatar_tipo','avatar_foto','empleado','rol','estado']
- *                                 ('rol' ya viene formateado — ej. "Admin" — desde
- *                                 CuentaUsuarioModel::mapRowToVista(), no se reformatea acá)
- * - array $roles                 cada uno: ['id','nombre'] (CuentaUsuarioModel::getRoles())
- * - array $empleadosDisponibles  cada uno: ['id','nombre'] — solo para el modal de crear
- * - array $filters               ['id_rol' => ..., 'estado' => ..., 'q' => ...] (valores actuales del GET)
- * - array $paginacion            ['desde','hasta','total','pagina_actual','total_paginas']
- * - string $csrfToken            token CSRF de la sesión actual, usado por el switch
- *                                 de estado en cuentas.js (toggleStatus no tiene <form>,
- *                                 así que no puede usar components/csrf-field.php)
- * - int|null $usuarioActualId    id del usuario logueado; se usa para deshabilitar
- *                                 visualmente su propio switch de estado (no puede
- *                                 desactivarse a sí mismo, ver CuentaUsuarioController::toggleStatus())
- * @var array $stats
- * @var array $usuarios
- * @var array $roles
- * @var array $empleadosDisponibles
- * @var array $filters
- * @var array $paginacion
- * @var string $csrfToken
- * @var int|null $usuarioActualId
+ * - array  $stats               ['total','pendientes','aprobadas','rechazadas']
+ * - array  $solicitudes         cada uno: ['id','usuario_id','fecha','hora','nombre','cargo','usuario','avatar_tipo','avatar_foto','avatar_color','iniciales','estado','origen']
+ * - array  $estadosMeta         mapa estado => ['label','clase'] (status-badge.php)
+ * - array  $usuariosDisponibles cada uno: ['id','nombre','usuario'] — para el modal de restablecer clave manual
+ * - array  $filters             ['estado' => ..., 'q' => ...] (valores actuales del GET)
+ * - array  $paginacion          ['desde','hasta','total','pagina_actual','total_paginas']
+ *
+ * 'origen' distingue si la fila nació de una solicitud real del
+ * usuario ('solicitud') o de un restablecimiento directo del admin
+ * sin solicitud previa ('admin') — ver RecuperacionAccesoModel::mapRow().
+ * Las filas con origen 'admin' muestran una etiqueta discreta bajo
+ * el badge de estado para no confundirlas con una solicitud atendida.
+ *
+ * Flujos que terminan mostrando credentials-modal.php (contraseña provisional):
+ * 1. aprobar-solicitud (recuperacion.js)   -> aprueba la solicitud pendiente y genera clave.
+ * 2. formRestablecerClave (este archivo)   -> restablece la clave de cualquier usuario, sin solicitud previa.
+ *
+ * @var array  $stats
+ * @var array  $solicitudes
+ * @var array  $estadosMeta
+ * @var array  $usuariosDisponibles
+ * @var array  $filters
+ * @var array  $paginacion
  */
-$pageTitle   = 'Cuentas de Usuario';
-$currentNav  = 'cuentas';
+$pageTitle  = 'Recuperación de Acceso';
+$currentNav = 'recuperacion';
 
 $breadcrumbs = [
     ['label' => 'Usuarios', 'href' => null],
-    ['label' => 'Cuentas de Usuario', 'href' => null],
+    ['label' => 'Recuperación de acceso', 'href' => null],
 ];
+
+$usuariosDisponibles = $usuariosDisponibles ?? [];
 
 ob_start();
 
   // ---------- Page header ----------
   ob_start();
   ?>
-  <button type="button" class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#modalCrearUsuario">
-    <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Crear Usuario
+  <button type="button" class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#restablecerClaveModal">
+    <i class="bi bi-key-fill me-1" aria-hidden="true"></i>Restablecer Contraseña
   </button>
   <?php
   $pageHeaderActions = ob_get_clean();
-  $pageHeading       = 'Gestión de Cuentas de Usuario';
-  $pageSubheading    = 'Gestione las credenciales de acceso y roles de los empleados del sistema.';
+  $pageHeading       = 'Gestión de Recuperación de Acceso';
+  $pageSubheading    = 'Gestione las solicitudes de restablecimiento de contraseña.';
   include __DIR__ . '/../../components/page-header.php';
-  ?>
+?>
 
 <!-- ---------- Stat cards ---------- -->
 <?php
-  // Los porcentajes vienen ya calculados del controlador (ver docblock de $stats),
-  // no se recalculan aquí para evitar divergencias entre backend y vista.
-  //
-  // statTrendType solo se usa para la tarjeta de "tendencia" real (variación en el
-  // tiempo). Para "activas"/"inactivas" el dato es una proporción del total, no una
-  // tendencia temporal, así que no se pinta una flecha de subida/bajada que
-  // implicaría algo que no se está midiendo. Si stat-card.php no soporta un tercer
-  // estado, ajustar aquí a 'neutral' (o el nombre que use el componente) en vez de
-  // forzar 'up'/'down'.
+  // Los porcentajes son proporciones del total, no tendencias en el tiempo,
+  // así que las tres tarjetas usan 'neutral' (ver misma discusión en
+  // usuarios/cuentas/index.php sobre statTrendType).
   $statsConfig = [
       [
-          'label' => 'Total usuarios',
-          'value' => (int) $stats['total'],
-          'icon'  => 'bi-people-fill',
-          'tone'  => 'primary',
-          'trend' => $stats['tendencia'],
-          'trendType' => 'up',
-      ],
-      [
-          'label' => 'Cuentas activas',
-          'value' => (int) $stats['activas'],
-          'icon'  => 'bi-person-check-fill',
-          'tone'  => 'success',
-          'trend' => $stats['porcentaje_activas'] . '% del total',
+          'label' => 'Solicitudes Pendientes',
+          'value' => (int) $stats['pendientes'],
+          'icon'  => 'bi-clock-history',
+          'tone'  => 'warning',
+          'trend' => ($stats['total'] > 0 ? round(($stats['pendientes'] / $stats['total']) * 100) : 0) . '% del total',
           'trendType' => 'neutral',
       ],
       [
-          'label' => 'Cuentas inactivas',
-          'value' => (int) $stats['inactivas'],
-          'icon'  => 'bi-person-x-fill',
+          'label' => 'Solicitudes Aprobadas',
+          'value' => (int) $stats['aprobadas'],
+          'icon'  => 'bi-shield-check',
+          'tone'  => 'success',
+          'trend' => ($stats['total'] > 0 ? round(($stats['aprobadas'] / $stats['total']) * 100) : 0) . '% del total',
+          'trendType' => 'neutral',
+      ],
+      [
+          'label' => 'Solicitudes Rechazadas',
+          'value' => (int) $stats['rechazadas'],
+          'icon'  => 'bi-slash-circle',
           'tone'  => 'danger',
-          'trend' => $stats['porcentaje_inactivas'] . '% del total',
+          'trend' => ($stats['total'] > 0 ? round(($stats['rechazadas'] / $stats['total']) * 100) : 0) . '% del total',
           'trendType' => 'neutral',
       ],
   ];
@@ -107,49 +105,40 @@ ob_start();
 
 <?php
   // ---------- Data panel: filtros ----------
-  // name="id_rol" aquí es correcto: coincide con lo que lee
-  // CuentaUsuarioController::getFiltersFromRequest() por GET.
-  $panelFormAction = BASE_URL . 'cuentaUsuario/index';
+  // Único filtro de esta vista: estado. name="estado" coincide con lo que lee
+  // RecuperacionAccesoController::getFiltersFromRequest() por GET.
+  $panelFormAction = BASE_URL . 'recuperacionAcceso/index';
 
   ob_start();
   ?>
-  <label for="filtroRol" class="visually-hidden">Rol</label>
-  <select id="filtroRol" name="id_rol" class="form-select">
-    <option value="">Rol (Todos)</option>
-    <?php foreach ($roles as $rol): ?>
-      <option value="<?= $rol['id'] ?>" <?= ((int) ($filters['id_rol'] ?? 0)) === (int) $rol['id'] ? 'selected' : '' ?>>
-        <?= htmlspecialchars($rol['nombre']) ?>
-      </option>
-    <?php endforeach; ?>
-  </select>
-
   <label for="filtroEstado" class="visually-hidden">Estado</label>
   <select id="filtroEstado" name="estado" class="form-select">
     <option value="">Estado (Todos)</option>
-    <option value="activo"   <?= ($filters['estado'] ?? '') === 'activo'   ? 'selected' : '' ?>>Activo</option>
-    <option value="inactivo" <?= ($filters['estado'] ?? '') === 'inactivo' ? 'selected' : '' ?>>Inactivo</option>
+    <option value="pendiente" <?= ($filters['estado'] ?? '') === 'pendiente' ? 'selected' : '' ?>>Pendiente</option>
+    <option value="aprobado"  <?= ($filters['estado'] ?? '') === 'aprobado'  ? 'selected' : '' ?>>Aprobado</option>
+    <option value="rechazado" <?= ($filters['estado'] ?? '') === 'rechazado' ? 'selected' : '' ?>>Rechazado</option>
   </select>
   <?php
   $panelFilters           = ob_get_clean();
   $panelSearchName        = 'q';
   $panelSearchValue       = $filters['q'] ?? '';
-  $panelSearchPlaceholder = 'Buscar por nombre, usuario o rol...';
+  $panelSearchPlaceholder = 'Buscar por nombre o usuario...';
 
   // ---------- Data panel: colgroup ----------
-  // Sin <colgroup>, table-layout: fixed reparte el ancho en partes iguales
-  // (720px / 5 columnas = 144px, poco para Usuario con avatar + nombre nowrap).
-  // Anchos en px, no en %: _tables.scss fija .table en min-width: 720px y un %
-  // se calcularía sobre esos 720px. La tabla crece hasta la suma de las columnas
-  // (scroll horizontal en móvil) y en escritorio el sobrante se reparte entre ellas.
-  // Orden: Usuario / Empleado / Rol / Estado / Acciones.
+  // Anchos en px, no en %: _tables.scss fija .table en min-width: 720px y, en
+  // móvil, un % se calcula sobre esos 720px (ej. 12% = 86px para Usuario, menos
+  // que su contenido nowrap). Con table-layout: fixed la tabla crece hasta la
+  // suma de las columnas (scroll horizontal en móvil) y en escritorio el
+  // espacio sobrante se reparte entre ellas.
+  // Orden: Fecha / Empleado / Usuario / Estado / Acciones.
   ob_start();
   ?>
   <colgroup>
-    <col style="width: 250px;">
-    <col style="width: 210px;">
-    <col style="width: 130px;">
     <col style="width: 120px;">
-    <col style="width: 150px;">
+    <col style="width: 240px;">
+    <col style="width: 160px;">
+    <col style="width: 190px;">
+    <col style="width: 120px;">
   </colgroup>
   <?php
   $panelColgroup = ob_get_clean();
@@ -158,9 +147,9 @@ ob_start();
   ob_start();
   ?>
   <tr>
-    <th scope="col">Usuario</th>
+    <th scope="col">Fecha</th>
     <th scope="col">Empleado</th>
-    <th scope="col">Rol</th>
+    <th scope="col" class="ps-4">Usuario</th>
     <th scope="col" class="text-center">Estado</th>
     <th scope="col" class="text-center">Acciones</th>
   </tr>
@@ -169,76 +158,84 @@ ob_start();
 
   // ---------- Data panel: tbody ----------
   ob_start();
-  foreach ($usuarios as $u):
-    $esInactivo   = $u['estado'] === 'inactivo';
-    // No se puede desactivar la propia cuenta (ver toggleStatus()
-    // en el controlador, que también lo bloquea del lado del servidor).
-    $esPropiaCuenta = $usuarioActualId !== null && (int) $u['id'] === (int) $usuarioActualId;
+  foreach ($solicitudes as $s):
+    $meta   = $estadosMeta[$s['estado']] ?? $estadosMeta['pendiente'];
+    $origen = $s['origen'] ?? 'solicitud';
   ?>
-    <tr class="<?= $esInactivo ? 'is-muted' : '' ?>">
+    <tr>
       <td>
-<div class="avatar-group">
-  <?php
-    $avatarSize     = 'md';
-    $avatarSrc      = ($u['avatar_tipo'] ?? 'iniciales') === 'foto'
-        ? htmlspecialchars(BASE_URL . $u['avatar_foto'])
-        : '';
-    $avatarAlt      = $u['nombre'];
-    $avatarTone     = $u['avatar_color'] ?? 'primary';
-    $avatarInitials = $u['iniciales'] ?? '';
-    include __DIR__ . '/../../components/avatar.php';
-  ?>
-  <span class="avatar-group__name"><?= htmlspecialchars($u['nombre']) ?></span>
-</div>
+        <div class="fw-semibold"><?= htmlspecialchars($s['fecha']) ?></div>
+        <div class="text-support small"><?= htmlspecialchars($s['hora']) ?></div>
       </td>
-      <td class="text-support">
-        <?= $u['empleado'] !== '' ? htmlspecialchars($u['empleado']) : '<span class="text-body-tertiary">—</span>' ?>
+      <td>
+        <div class="avatar-group d-flex align-items-center gap-2">
+          <div class="flex-shrink-0">
+            <?php
+              // Si avatar_tipo es 'foto', se pinta la imagen real del empleado
+              // (BASE_URL + ruta relativa ya normalizada por AvatarTrait::resolverAvatar).
+              // Si no, cae a iniciales+color por rol.
+              $avatarSize     = 'md';
+              $avatarSrc      = ($s['avatar_tipo'] ?? 'iniciales') === 'foto'
+                  ? htmlspecialchars(BASE_URL . $s['avatar_foto'])
+                  : '';
+              $avatarAlt      = $s['nombre'];
+              $avatarTone     = $s['avatar_color'] ?? 'primary';
+              $avatarInitials = $s['iniciales'] ?? '';
+              include __DIR__ . '/../../components/avatar.php';
+            ?>
+          </div>
+          <div class="text-truncate">
+            <div class="avatar-group__name text-truncate"><?= htmlspecialchars($s['nombre']) ?></div>
+          </div>
+        </div>
       </td>
-      <td><?= htmlspecialchars($u['rol']) ?></td>
+      <td class="text-support ps-4"><?= htmlspecialchars($s['usuario']) ?></td>
       <td class="text-center">
         <?php
-          $badgeLabel  = $esInactivo ? 'Inactivo' : 'Activo';
-          $badgeStatus = $esInactivo ? 'inactive' : 'active';
+          $badgeLabel  = $meta['label'];
+          $badgeStatus = $meta['clase'];
           include __DIR__ . '/../../components/status-badge.php';
         ?>
+        <?php if ($origen === 'admin'): ?>
+          <div class="text-support small mt-1">
+            <i class="bi bi-person-gear" aria-hidden="true"></i> Restablecido por admin
+          </div>
+        <?php endif; ?>
       </td>
       <td class="text-center">
         <div class="data-panel__actions">
-          <button type="button"
-                  class="action-btn action-btn--view btn-ver-usuario"
-                  title="Ver detalle"
-                  data-id="<?= (int) $u['id'] ?>">
-            <i class="bi bi-eye"></i>
-          </button>
-          <button type="button"
-                  class="action-btn action-btn--edit btn-editar-usuario"
-                  title="Editar"
-                  data-id="<?= (int) $u['id'] ?>"
-                  data-nombre-usuario="<?= htmlspecialchars($u['nombre_usuario']) ?>"
-                  data-empleado="<?= htmlspecialchars($u['empleado']) ?>"
-                  data-id-rol="<?= (int) $u['id_rol'] ?>">
-            <i class="bi bi-pencil"></i>
-          </button>
-          <div class="form-check form-switch table-switch mb-0"
-               title="<?= $esPropiaCuenta ? 'No puedes desactivar tu propia cuenta' : (($esInactivo ? 'Activar' : 'Desactivar') . ' cuenta') ?>">
-            <input
-              class="form-check-input toggle-estado-usuario"
-              type="checkbox"
-              role="switch"
-              data-usuario-id="<?= (int) $u['id'] ?>"
-              <?= $esInactivo ? '' : 'checked' ?>
-              <?= $esPropiaCuenta ? 'disabled' : '' ?>
-            >
-          </div>
+          <?php if ($s['estado'] === 'pendiente'): ?>
+            <button type="button"
+              class="action-btn action-btn--toggle aprobar-solicitud"
+              data-solicitud-id="<?= (int) $s['id'] ?>"
+              data-usuario-id="<?= (int) $s['usuario_id'] ?>"
+              data-usuario-nombre="<?= htmlspecialchars($s['nombre'] . ' · ' . $s['usuario']) ?>"
+              title="Aprobar solicitud">
+              <i class="bi bi-check-lg" aria-hidden="true"></i>
+            </button>
+            <button type="button"
+              class="action-btn action-btn--danger rechazar-solicitud"
+              data-solicitud-id="<?= (int) $s['id'] ?>"
+              title="Rechazar solicitud">
+              <i class="bi bi-x-lg" aria-hidden="true"></i>
+            </button>
+          <?php else: ?>
+            <button type="button" class="action-btn action-btn--view ver-solicitud"
+              data-bs-toggle="modal"
+              data-bs-target="#modalDetalleSolicitud"
+              data-solicitud-id="<?= (int) $s['id'] ?>"
+              title="Ver detalle">
+              <i class="bi bi-eye" aria-hidden="true"></i>
+            </button>
+          <?php endif; ?>
         </div>
       </td>
     </tr>
   <?php endforeach; ?>
-
-  <?php if (empty($usuarios)): ?>
+  <?php if (empty($solicitudes)): ?>
     <tr>
       <td colspan="5" class="text-center text-support py-4">
-        No se encontraron usuarios con los filtros seleccionados.
+        No se encontraron solicitudes con los filtros seleccionados.
       </td>
     </tr>
   <?php endif; ?>
@@ -246,10 +243,10 @@ ob_start();
   $panelTableBody = ob_get_clean();
 
   $panelSummary = 'Mostrando ' . (int) $paginacion['desde'] . ' a ' . (int) $paginacion['hasta']
-                . ' de ' . (int) $paginacion['total'] . ' usuarios';
+                . ' de ' . (int) $paginacion['total'] . ' resultados';
   $panelPagination = [
-      'pagina_actual'  => $paginacion['pagina_actual'],
-      'total_paginas'  => $paginacion['total_paginas'],
+      'pagina_actual' => $paginacion['pagina_actual'],
+      'total_paginas' => $paginacion['total_paginas'],
   ];
 
   include __DIR__ . '/../../components/data-panel.php';
@@ -262,11 +259,10 @@ $pageContent = ob_get_clean();
 // Se capturan aparte de $pageContent: layouts/app.php los imprime bajo <body>,
 // fuera de .app-shell, para que no hereden overflow ni apilamiento del cascarón.
 ob_start();
-require_once __DIR__ . '/modals/create-modal.php';
-require_once __DIR__ . '/modals/credentials-modal.php';
-require_once __DIR__ . '/modals/show-modal.php';
-require_once __DIR__ . '/modals/edit-modal.php';
+include __DIR__ . '/modals/reset-password-modal.php';
+include __DIR__ . '/modals/credentials-modal.php';
+include __DIR__ . '/modals/detalle-modal.php';
 $pageModals = ob_get_clean();
 
-$extraScripts = ['/js/cuentas.js'];
+$extraScripts = ['/js/recuperacion.js'];
 include __DIR__ . '/../../layouts/app.php';

@@ -108,6 +108,15 @@ $rutasPermitidas = [
         'update'       => ['admin'],
         'toggleStatus' => ['admin'],
     ],
+    'empleado' => [
+        'index'        => ['directivo'],
+        'create'       => ['directivo'],
+        'show'         => ['directivo'],
+        'edit'         => ['directivo'],
+        'store'        => ['directivo'],
+        'update'       => ['directivo'],
+        'toggleStatus' => ['directivo'],
+    ],
 ];
 
 // 8. MIDDLEWARE DE AUTENTICACION Y AUTORIZACION

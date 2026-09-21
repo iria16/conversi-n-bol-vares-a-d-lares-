@@ -262,6 +262,15 @@ class CuentaUsuarioController extends CrudController
         }
 
         try {
+            $usuarioActual = $model->getDetalleById($id);
+            if (!$usuarioActual) {
+                $this->jsonResponse(false, null, 'Usuario no encontrado.', 404);
+            }
+
+            if (($usuarioActual['estado'] ?? '') === 'inactivo') {
+                $this->jsonResponse(false, null, 'No se puede modificar una cuenta de usuario inactiva. Debe activarla primero.', 422);
+            }
+
             if ($model->existeNombreUsuario($nombreUsuario, $id)) {
                 $this->jsonResponse(false, null, "El nombre de usuario \"{$nombreUsuario}\" ya está en uso.", 422);
             }

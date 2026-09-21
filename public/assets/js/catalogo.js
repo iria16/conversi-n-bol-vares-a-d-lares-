@@ -79,12 +79,9 @@ function initSelectorTipoCatalogo() {
 
 // --- Cambiar Estado (Activo / Inactivo) ---
 function initToggleEstadoElemento() {
-  document.querySelectorAll('.toggle-estado').forEach(asociarToggleEstado);
-}
-
-function asociarToggleEstado(input) {
-  input.addEventListener('change', async function (e) {
-    var checkbox = e.target;
+  document.addEventListener('change', async function (e) {
+    var checkbox = e.target.closest('.toggle-estado');
+    if (!checkbox) return;
     var id = checkbox.dataset.elementoId;
     var tipoActivo = getTipoCatalogoActivo();
     var nuevoEstadoActivo = checkbox.checked;
@@ -129,7 +126,18 @@ function asociarToggleEstado(input) {
         return;
       }
 
-      if (tr) tr.classList.toggle('is-muted', !nuevoEstadoActivo);
+      if (tr) {
+        tr.classList.toggle('is-muted', !nuevoEstadoActivo);
+        var btnEditar = tr.querySelector('.editar-elemento');
+        if (btnEditar) {
+          btnEditar.disabled = !nuevoEstadoActivo;
+          btnEditar.title = nuevoEstadoActivo ? 'Editar elemento' : 'No se puede editar un elemento inactivo';
+        }
+        var switchWrapper = tr.querySelector('.table-switch');
+        if (switchWrapper && !checkbox.disabled) {
+          switchWrapper.title = (nuevoEstadoActivo ? 'Desactivar' : 'Activar') + ' elemento';
+        }
+      }
       if (badge) {
         badge.className = 'status-badge status-badge--' + (nuevoEstadoActivo ? 'active' : 'inactive');
         badge.textContent = nuevoEstadoActivo ? 'Activo' : 'Inactivo';
@@ -253,7 +261,7 @@ function initEditarElementoModal() {
   // Handler delegatorio para abrir el modal con datos de la fila
   document.addEventListener('click', function (e) {
     var btnEditar = e.target.closest('.editar-elemento');
-    if (!btnEditar) return;
+    if (!btnEditar || btnEditar.disabled || btnEditar.classList.contains('disabled')) return;
     e.preventDefault();
 
     var d = btnEditar.dataset;

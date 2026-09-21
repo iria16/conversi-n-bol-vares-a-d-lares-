@@ -129,7 +129,7 @@ if (!function_exists('sigde_nav_sections')) {
                 'label' => 'Personal',
                 'roles' => ['directivo'],
                 'items' => [
-                    ['id' => 'empleados', 'label' => 'Empleados', 'icon' => 'bi-person-badge', 'href' => BASE_URL . 'staff/index'],
+                    ['id' => 'empleados', 'label' => 'Empleados', 'icon' => 'bi-person-badge', 'href' => BASE_URL . 'empleado/index'],
                 ],
             ],
             [

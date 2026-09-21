@@ -70,7 +70,18 @@ function initToggleEstadoUsuario() {
         return;
       }
 
-      if (tr) tr.classList.toggle('is-muted', !nuevoEstadoActivo);
+      if (tr) {
+        tr.classList.toggle('is-muted', !nuevoEstadoActivo);
+        var btnEditar = tr.querySelector('.btn-editar-usuario');
+        if (btnEditar) {
+          btnEditar.disabled = !nuevoEstadoActivo;
+          btnEditar.title = nuevoEstadoActivo ? 'Editar' : 'No se puede editar una cuenta inactiva';
+        }
+        var switchWrapper = tr.querySelector('.table-switch');
+        if (switchWrapper && !checkbox.disabled) {
+          switchWrapper.title = (nuevoEstadoActivo ? 'Desactivar' : 'Activar') + ' cuenta';
+        }
+      }
       if (badge) {
         badge.className = 'status-badge status-badge--' + (nuevoEstadoActivo ? 'active' : 'inactive');
         badge.textContent = nuevoEstadoActivo ? 'Activo' : 'Inactivo';
@@ -341,7 +352,7 @@ function initEditarUsuarioModal() {
 
   document.addEventListener('click', function (e) {
     var btnEditar = e.target.closest('.btn-editar-usuario');
-    if (!btnEditar) return;
+    if (!btnEditar || btnEditar.disabled || btnEditar.classList.contains('disabled')) return;
 
     var d = btnEditar.dataset;
     var inputId = modalEditarEl.querySelector('#euId');
