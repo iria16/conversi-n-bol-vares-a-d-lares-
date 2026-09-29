@@ -35,7 +35,7 @@ ob_start();
 $pageHeaderActions = ob_get_clean();
 $pageHeading       = 'Gestión de Grados y Secciones';
 $pageSubheading    = $pageDescription;
-include __DIR__ . '/../components/page-header.php';
+include __DIR__ . '/../../components/page-header.php';
 ?>
 
 <!-- ---------- Stat cards ---------- -->
@@ -48,7 +48,7 @@ include __DIR__ . '/../components/page-header.php';
       $statTone      = 'primary';
       $statTrend     = 'Configurados';
       $statTrendType = 'neutral';
-      include __DIR__ . '/../components/stat-card.php';
+      include __DIR__ . '/../../components/stat-card.php';
     ?>
   </div>
   <div class="col-sm-6 col-lg-4">
@@ -59,7 +59,7 @@ include __DIR__ . '/../components/page-header.php';
       $statTone      = 'success';
       $statTrend     = 'Activos';
       $statTrendType = 'neutral';
-      include __DIR__ . '/../components/stat-card.php';
+      include __DIR__ . '/../../components/stat-card.php';
     ?>
   </div>
   <div class="col-sm-6 col-lg-4">
@@ -70,7 +70,7 @@ include __DIR__ . '/../components/page-header.php';
       $statTone      = 'warning';
       $statTrend     = 'Capacidad';
       $statTrendType = 'neutral';
-      include __DIR__ . '/../components/stat-card.php';
+      include __DIR__ . '/../../components/stat-card.php';
     ?>
   </div>
 </div>
@@ -189,7 +189,7 @@ $panelPagination = [
     'total_paginas' => $paginacion['total_paginas'],
 ];
 
-include __DIR__ . '/../components/data-panel.php';
+include __DIR__ . '/../../components/data-panel.php';
 ?>
 
 <?php
@@ -209,4 +209,4 @@ $editMode      = true;
 include __DIR__ . '/structure-modal.php';
 
 $pageContent = ob_get_clean();
-require __DIR__ . '/../layouts/app.php';
+require __DIR__ . '/../../layouts/app.php';

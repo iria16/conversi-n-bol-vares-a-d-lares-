@@ -22,42 +22,44 @@ ob_start();
 <form id="formEditarUsuario" novalidate>
   <input type="hidden" id="euId" name="id">
 
-  <div class="mb-3">
-    <label class="label-sigde" for="euEmpleado">Empleado asociado</label>
-    <div class="input-icon-group">
-      <i class="bi bi-person" aria-hidden="true"></i>
-      <input type="text" class="form-control" id="euEmpleado" disabled aria-describedby="euEmpleadoHelp">
-    </div>
-    <div class="form-text" id="euEmpleadoHelp">El empleado asociado a la cuenta no se puede cambiar desde aquí.</div>
-  </div>
-
-  <div class="row g-3">
-    <div class="col-md-6">
-      <label class="label-sigde" for="euNombreUsuario">Usuario</label>
-      <div class="input-icon-group">
-        <i class="bi bi-person-badge" aria-hidden="true"></i>
-        <input type="text" class="form-control" id="euNombreUsuario" name="nombre_usuario"
-               required minlength="3" maxlength="50" pattern="[a-zA-Z0-9._]+" title="Letras, números, puntos y guiones bajos."
-               autocomplete="off" aria-describedby="euNombreUsuarioHelp">
+  <section class="wizard-summary__section">
+    <div class="wizard-summary__card">
+      <div class="mb-3">
+        <label class="label-sigde" for="euEmpleado">Empleado asociado</label>
+        <div class="input-icon-group">
+          <i class="bi bi-person" aria-hidden="true"></i>
+          <input type="text" class="form-control" id="euEmpleado" disabled aria-describedby="euEmpleadoHelp">
+        </div>
+        <div class="form-text" id="euEmpleadoHelp">El empleado asociado a la cuenta no se puede cambiar desde aquí.</div>
       </div>
-      <div class="form-text" id="euNombreUsuarioHelp">Letras minúsculas, números, puntos y guiones bajos.</div>
-      <div class="invalid-feedback">Usa de 3 a 50 caracteres: letras, números, puntos (.) o guiones bajos (_).</div>
-    </div>
 
-    <div class="col-md-6">
-      <label class="label-sigde" for="euRol">Rol</label>
-      <div class="input-icon-group">
-        <i class="bi bi-shield-check" aria-hidden="true"></i>
-        <select class="form-select" id="euRol" name="rol_id" required>
-          <option value="">Seleccione un rol</option>
-          <?php foreach ($roles as $rol): ?>
-            <option value="<?= (int) $rol['id'] ?>"><?= htmlspecialchars($rol['nombre']) ?></option>
-          <?php endforeach; ?>
-        </select>
+      <div class="row g-2">
+        <div class="col-md-6">
+          <label class="label-sigde" for="euNombreUsuario">Usuario</label>
+          <div class="input-icon-group">
+            <i class="bi bi-person-badge" aria-hidden="true"></i>
+            <input type="text" class="form-control" id="euNombreUsuario" name="nombre_usuario"
+                   required minlength="3" maxlength="50" pattern="[a-zA-Z0-9._]+" title="Letras, números, puntos y guiones bajos."
+                   autocomplete="off">
+          </div>
+          <div class="invalid-feedback">Usa de 3 a 50 caracteres: letras, números, puntos (.) o guiones bajos (_).</div>
+        </div>
+
+        <div class="col-md-6">
+          <label class="label-sigde" for="euRol">Rol</label>
+          <div class="input-icon-group">
+            <i class="bi bi-shield-check" aria-hidden="true"></i>
+            <select class="form-select" id="euRol" name="rol_id" required>
+              <option value="">Seleccione un rol</option>
+              <?php foreach ($roles as $rol): ?>
+                <option value="<?= (int) $rol['id'] ?>"><?= htmlspecialchars($rol['nombre']) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+        </div>
       </div>
-      <div class="invalid-feedback">Selecciona un rol.</div>
     </div>
-  </div>
+  </section>
 </form>
 <?php
 $modalBody = ob_get_clean();

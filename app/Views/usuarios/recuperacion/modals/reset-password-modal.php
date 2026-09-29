@@ -20,39 +20,52 @@ ob_start();
 ?>
 <form id="formRestablecerClave" novalidate>
 
-  <div class="form-section__label">Información de cuenta</div>
-
-  <div class="mb-4">
-    <label for="restablecerClave__usuario" class="label-sigde">Seleccione el usuario</label>
-    <div class="input-icon-group">
-      <i class="bi bi-person" aria-hidden="true"></i>
-      <select class="form-select" id="restablecerClave__usuario" name="usuario_id" required <?= $hayUsuariosDisponibles ? '' : 'disabled' ?>>
-        <option value="" selected disabled>Seleccionar usuario</option>
-        <?php foreach ($usuariosDisponibles as $usuario): ?>
-          <option value="<?= (int) $usuario['id'] ?>">
-            <?= htmlspecialchars($usuario['nombre'] . ' · ' . $usuario['usuario']) ?>
-          </option>
-        <?php endforeach; ?>
-      </select>
+  <section class="wizard-summary__section">
+    <div class="wizard-summary__section-header">
+      <span class="wizard-summary__icon"><i class="bi bi-person-vcard" aria-hidden="true"></i></span>
+      <span class="wizard-summary__section-title">Información de cuenta</span>
     </div>
-    <?php if ($hayUsuariosDisponibles): ?>
-      <div class="invalid-feedback">Seleccione un usuario.</div>
-    <?php else: ?>
-      <div class="form-text text-danger">No hay usuarios disponibles para restablecer contraseña.</div>
-    <?php endif; ?>
-  </div>
-
-  <div class="form-section__label">Seguridad</div>
-  <div class="info-alert">
-    <span class="info-alert__icon"><i class="bi bi-info-circle-fill" aria-hidden="true"></i></span>
-    <div>
-      <p class="info-alert__title">Generación automática</p>
-      <p class="info-alert__text">
-        El sistema generará una clave provisional de forma automática.
-        Esta solo se mostrará una vez al confirmar la acción por motivos de seguridad.
-      </p>
+    <div class="wizard-summary__card">
+      <div class="mb-3">
+        <label for="restablecerClave__usuario" class="label-sigde">Seleccione el usuario</label>
+        <div class="input-icon-group">
+          <i class="bi bi-person" aria-hidden="true"></i>
+          <select class="form-select" id="restablecerClave__usuario" name="usuario_id" required <?= $hayUsuariosDisponibles ? '' : 'disabled' ?>>
+            <option value="" selected disabled>Seleccionar usuario</option>
+            <?php foreach ($usuariosDisponibles as $usuario): ?>
+              <option value="<?= (int) $usuario['id'] ?>">
+                <?= htmlspecialchars($usuario['nombre'] . ' · ' . $usuario['usuario']) ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <?php if ($hayUsuariosDisponibles): ?>
+          <div class="invalid-feedback">Seleccione un usuario.</div>
+        <?php else: ?>
+          <div class="form-text text-danger">No hay usuarios disponibles para restablecer contraseña.</div>
+        <?php endif; ?>
+      </div>
     </div>
-  </div>
+  </section>
+
+  <section class="wizard-summary__section mt-2">
+    <div class="wizard-summary__section-header">
+      <span class="wizard-summary__icon"><i class="bi bi-shield-lock" aria-hidden="true"></i></span>
+      <span class="wizard-summary__section-title">Seguridad</span>
+    </div>
+    <div class="wizard-summary__card">
+      <div class="info-alert">
+        <span class="info-alert__icon"><i class="bi bi-info-circle-fill" aria-hidden="true"></i></span>
+        <div>
+          <p class="info-alert__title">Generación automática</p>
+          <p class="info-alert__text">
+            El sistema generará una clave provisional de forma automática.
+            Esta solo se mostrará una vez al confirmar la acción por motivos de seguridad.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
 </form>
 <?php
 $modalBody = ob_get_clean();

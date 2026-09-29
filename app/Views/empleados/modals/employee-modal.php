@@ -1,6 +1,6 @@
 <?php
 /**
- * app/Views/staff/modals/employee-modal.php
+ * app/Views/empleados/modals/employee-modal.php
  * Wizard "Registrar Nuevo Empleado" de 6 pasos, armado sobre components/modal.php:
  *   - el stepper entra por $modalHeaderExtra (entre el header y el body)
  *   - el <form> vive en el body y los botones del footer lo referencian con form="..."

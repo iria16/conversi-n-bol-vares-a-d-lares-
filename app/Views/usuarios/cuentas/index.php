@@ -25,7 +25,6 @@
  * @var array $empleadosDisponibles
  * @var array $filters
  * @var array $paginacion
- * @var string $csrfToken
  * @var int|null $usuarioActualId
  */
 $pageTitle   = 'Cuentas de Usuario';
@@ -245,10 +244,10 @@ $pageContent = ob_get_clean();
 // fuera de .app-shell, para que no hereden overflow ni apilamiento del cascarón.
 ob_start();
 require_once __DIR__ . '/modals/create-modal.php';
-require_once __DIR__ . '/modals/credentials-modal.php';
+require_once __DIR__ . '/../../components/credentials-modal.php';
 require_once __DIR__ . '/modals/show-modal.php';
 require_once __DIR__ . '/modals/edit-modal.php';
 $pageModals = ob_get_clean();
 
-$extraScripts = ['/js/cuentas.js'];
+$extraScripts = ['/js/cuentas.js']; // la version la agrega partials/scripts.php
 include __DIR__ . '/../../layouts/app.php';

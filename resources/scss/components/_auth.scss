@@ -5,14 +5,27 @@
 // de Bootstrap directamente en el HTML (d-none d-lg-flex), no aquí.
 // ==========================================================================
 
-// ---------- Bloqueo de scroll de página (solo en pantallas de auth) ----------
-// El <body> de estas vistas debe llevar la clase .auth-page (ver login.php,
-// recuperar-acceso.php, cambio-password.php) para que el scroll de página
-// quede bloqueado y solo .auth-split__form scrollee internamente.
-body.auth-page {
-  height: 100%;
-  overflow: hidden;
-}
+// ---------- Colores propios de los formularios de AUTENTICACIÓN ----------
+//
+// Todo lo de abajo está acotado a `.auth-card`, que es el <section> blanco del
+// layout de auth (app/Views/layouts/auth.php) y envuelve el contenido de las
+// TRES pantallas de esta carpeta: login, recuperar-acceso y cambio-password. Los
+// tres formularios se ven igual entre sí, y ninguno toca los `.input-icon-group`
+// de los modales ni de las barras de filtro del resto del sistema.
+//
+// `.auth-card` es una clase exclusiva de esta carpeta: no aparece en ninguna otra
+// vista del proyecto, y el layout que la define solo lo usan estas tres. Ese es
+// el motivo de usarla de scope en vez de `.login-form`, que era más chica y
+// dejaba fuera a las otras dos.
+//
+// Por qué variables nuevas y no reusar las globales: sobre la tarjeta blanca un
+// input blanco con borde al 18% desaparece. Las globales sirven bien donde los
+// inputs van sobre cajas grises; cambiarlas arreglaría el login rompiendo
+// modales y filtros, que es justo lo que no se quiere.
+$auth-input-bg:       #f6f7fb;  // tinte leve: separa el campo de la tarjeta
+$auth-input-bg-focus: #ffffff;  // al escribir, blanco para que se lea cómodo
+$auth-input-border:   #d5d9e4;  // borde que se ve sin volverse ruidoso
+$auth-input-muted:    #8a91a5;  // iconos, placeholder y el ojo del toggle
 
 .auth-split {
   height: 100vh;
@@ -115,7 +128,7 @@ body.auth-page {
 .auth-card {
   width: 100%;
   max-width: 420px;
-  background: #fff;
+  background: $surface;
   border: none;
   border-radius: $border-radius-xl;
   box-shadow: $box-shadow;
@@ -157,44 +170,6 @@ body.auth-page {
   }
 }
 
-// ---------- Alerta de credenciales (login) ----------
-// Reutilizable para cualquier mensaje de error de formulario que necesite
-// el ícono circular + texto, no solo login. Oculta por defecto: se
-// muestra vía JS/PHP cuando el backend responda con un error.
-.auth-alert {
-  display: none;
-  align-items: flex-start;
-  gap: 0.75rem;
-  background: tint-color($danger, 88%);
-  border-radius: $border-radius;
-  padding: 0.9rem 1rem;
-  margin-top: 1.5rem;
-
-  &.is-visible {
-    display: flex;
-  }
-}
-
-.auth-alert__icon {
-  flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: $danger;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.7rem;
-  margin-top: 0.1rem;
-}
-
-.auth-alert__text {
-  color: shade-color($danger, 15%);
-  font-size: 0.85rem;
-  line-height: 1.4;
-}
-
 // ---------- Checklist de requisitos de seguridad ----------
 // Usado por: app/Views/auth/cambio-password.php
 // Se actualiza en vivo vía JS (initPasswordRequirementsChecklist en main.js)
@@ -224,4 +199,119 @@ body.auth-page {
       }
     }
   }
+}
+
+// ==========================================================================
+// Inputs de los formularios de AUTENTICACIÓN
+// ==========================================================================
+//
+// Aplica a las tres pantallas de la carpeta auth (login, recuperar-acceso y
+// cambio-password) por medio de `.auth-card`, para que los campos se vean
+// iguales entre sí.
+//
+// Acotado a propósito. `.input-icon-group` es un componente compartido (además
+// de estas tres, lo usan los modales y la barra de filtros de los listados) y su
+// archivo SCSS no se toca.
+//
+// El orden de estas reglas NO es arbitrario, y es la parte que hay que cuidar
+// si se edita más adelante. Estas son las especificidades que compila
+// _input-icon-group.scss, que es lo que hay que ganarle:
+//
+//   .input-icon-group                                             (0,1,0)
+//   .input-icon-group >i                                          (0,1,1)
+//   .input-icon-group__toggle                                     (0,1,0)
+//   .input-icon-group .form-control                               (0,2,0)
+//   .input-icon-group:focus-within                                (0,2,0)
+//   .input-icon-group .form-control:-webkit-autofill              (0,3,0)
+//   .input-icon-group:has(.form-control.is-invalid)               (0,3,0)
+//   .input-icon-group:has(.form-control:valid)                    (0,3,0)
+//   .input-icon-group:focus-within .form-control:-webkit-autofill (0,4,0)
+//   .was-validated .input-icon-group:has(.form-control:invalid)   (0,4,0)
+//
+// Y las de este bloque:
+//
+//   .auth-card .input-icon-group                                  (0,2,0)
+//   .auth-card .input-icon-group >i                               (0,2,1)
+//   .auth-card .input-icon-group__toggle                          (0,2,0)
+//   .auth-card .input-icon-group:focus-within                     (0,3,0)
+//   .auth-card .input-icon-group .form-control:-webkit-autofill  (0,4,0)
+//   .auth-card .input-icon-group:focus-within
+//     .form-control:-webkit-autofill                               (0,5,0)
+//   .auth-card .input-icon-group:has(.form-control.is-invalid)    (0,4,0)
+//   .auth-card .was-validated .input-icon-group:has(:invalid)     (0,5,0)
+//
+// El punto que obliga a repetir las reglas de validación al final: `:focus-within`
+// de este bloque queda en (0,3,0), que EMPATA con
+// `.input-icon-group:has(.form-control.is-invalid)`. En un empate gana la que
+// aparece después en el archivo, y este bloque se importa después, así que el
+// foco se comería el borde rojo: el campo con error se vería normal mientras se
+// escribe en él. Por eso las de validación se vuelven a declarar con el prefijo
+// `.auth-card`, que las sube a (0,4,0) y (0,5,0) y gana siempre.
+//
+// El mixin input-icon-autofill-fill viene de _input-icon-group.scss y se puede
+// usar desde acá porque app.scss importa ese archivo antes que éste.
+
+// ---------- Reposo ----------
+.auth-card .input-icon-group {
+  background-color: $auth-input-bg;
+  border-color: $auth-input-border;
+
+  // Icono prefijo (usuario, candado, etc.)
+  >i {
+    color: $auth-input-muted;
+  }
+
+  // El placeholder lo pinta Bootstrap sobre el input, no sobre el wrapper, así
+  // que hay que apuntarlo dentro. Sin esto los campos seguirían con el gris
+  // pálido aunque el tinte ya se viera.
+  .form-control::placeholder,
+  .form-select::placeholder {
+    color: $auth-input-muted;
+    opacity: 1;
+  }
+
+  // Autofill en reposo. El mixin pinta un box-shadow inset del color que se le
+  // pase, y el de por defecto es $surface (blanco): sin esto, el navegador
+  // autocompletando el usuario dejaría un bloque blanco sobre el campo tintado.
+  // El campo de usuario SÍ se autocompleta (lleva autocomplete="username").
+  .form-control:-webkit-autofill,
+  .form-control:-webkit-autofill:hover,
+  .form-control:-webkit-autofill:focus,
+  .form-control:-webkit-autofill:active {
+    @include input-icon-autofill-fill($auth-input-bg);
+  }
+}
+
+// El botón del ojo vive como regla suelta en el componente compartido, así que
+// se alcanza por su propia clase y no anidada.
+.auth-card .input-icon-group__toggle {
+  color: $auth-input-muted;
+}
+
+// ---------- Foco ----------
+.auth-card .input-icon-group:focus-within {
+  // Vuelve a blanco: escribiendo, un tinte de fondo ayuda menos que un fondo
+  // limpio. El borde y el aro de foco son los del componente, no se cambian.
+  background-color: $auth-input-bg-focus;
+  border-color: $primary;
+  box-shadow: 0 0 0 0.2rem $tint-active;
+
+  .form-control:-webkit-autofill,
+  .form-control:-webkit-autofill:hover,
+  .form-control:-webkit-autofill:focus,
+  .form-control:-webkit-autofill:active {
+    @include input-icon-autofill-fill($auth-input-bg-focus);
+  }
+}
+
+// ---------- Validación ----------
+// Se repiten aquí a propósito: ver la nota de especificidad de arriba. Si se
+// quitan, el borde rojo desaparece mientras el campo con error tiene el foco.
+.auth-card .was-validated .input-icon-group:has(.form-control:invalid),
+.auth-card .input-icon-group:has(.form-control.is-invalid) {
+  border-color: $danger;
+}
+
+.auth-card .was-validated .input-icon-group:has(.form-control:valid) {
+  border-color: $success;
 }

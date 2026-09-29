@@ -5,9 +5,7 @@
 // ==========================================================================
 
 .data-panel {
-  background: #fff;
-  border-radius: $border-radius-xl;
-  box-shadow: $box-shadow-sm;
+  @include surface-card;
   overflow: hidden;
   position: relative;
 
@@ -23,7 +21,7 @@
   align-items: center;
   gap: 0.75rem;
   padding: 1rem 1.15rem;
-  border-bottom: 1px solid rgba($primary, 0.06);
+  border-bottom: 1px solid $primary-tint;
 }
 
 .data-panel__filters {
@@ -96,7 +94,7 @@
     letter-spacing: 0.08em;
     white-space: nowrap;
     padding: 0.85rem 1.15rem;
-    border-bottom: 1px solid rgba($primary, 0.06);
+    border-bottom: 1px solid $primary-tint;
     background: rgba($light, 0.5);
   }
 
@@ -139,6 +137,24 @@
   gap: 0.35rem;
 }
 
+/* Una fila desactivada se ve tachada y atenuada. Es la fila de un familiar que
+   se dejó de tener activo: sigue en la lista y en el historial, pero no cuenta.
+   Sin esto, desactivar sería indistinguible de activar, que es justo lo que no
+   puede pasar cuando la decisión tiene consecuencias legales (autorizar
+   retiros). */
+.table-row--inactive {
+  opacity: 0.55;
+
+  td {
+    text-decoration: line-through;
+    text-decoration-color: rgba($danger, 0.5);
+  }
+
+  .status-badge {
+    text-decoration: none;
+  }
+}
+
 .action-btn {
   display: inline-flex;
   align-items: center;
@@ -156,7 +172,7 @@
 
   &:hover,
   &:focus {
-    background: rgba($primary, 0.06);
+    background: $primary-tint;
     color: $primary;
   }
 
@@ -169,7 +185,7 @@
   &--edit:hover,
   &--edit:focus {
     color: $primary;
-    background: rgba($primary, 0.08);
+    background: $tint-hover;
   }
 
   &--toggle:hover,
@@ -201,7 +217,7 @@
   gap: 0.75rem;
   align-items: center;
   padding: 0.85rem 1.15rem;
-  border-top: 1px solid rgba($primary, 0.06);
+  border-top: 1px solid $primary-tint;
   font-size: 0.82rem;
   color: $secondary;
 
@@ -218,20 +234,21 @@
     font-size: 0.82rem;
     font-weight: 600;
     padding: 0.35rem 0.65rem;
-    border-radius: 50% !important;
     min-width: 2rem;
     text-align: center;
     margin: 0 0.1rem;
 
     &:hover {
-      background: rgba($primary, 0.06);
+      background: $primary-tint;
       color: $primary;
     }
   }
 
+  // La página activa se marca solo con el número: sin círculo de fondo.
   .page-item.active .page-link {
-    background: $primary;
-    color: #fff;
+    background: transparent;
+    color: $primary;
+    font-weight: 700;
   }
 
   .page-item.disabled .page-link {

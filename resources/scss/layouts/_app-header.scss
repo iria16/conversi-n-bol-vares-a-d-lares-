@@ -15,7 +15,7 @@
   padding: 0.85rem 1rem;
   background: rgba(#fff, 0.92);
   backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba($primary, 0.06);
+  border-bottom: 1px solid $primary-tint;
 
   @include media-breakpoint-up(md) {
     padding: 0.85rem 1.75rem;
@@ -41,7 +41,7 @@
   height: 2.25rem;
   border: none;
   border-radius: $border-radius;
-  background: rgba($primary, 0.06);
+  background: $primary-tint;
   color: $primary;
   font-size: 1.25rem;
   cursor: pointer;
@@ -49,7 +49,7 @@
 
   &:hover,
   &:focus {
-    background: rgba($primary, 0.1);
+    background: $tint-active;
   }
 
   @include media-breakpoint-up(lg) {
@@ -111,7 +111,7 @@
 
   &:hover,
   &:focus {
-    background: rgba($primary, 0.06);
+    background: $primary-tint;
     color: $primary;
   }
 }
@@ -133,7 +133,7 @@
   gap: 0.65rem;
   padding: 0.15rem 0 0.15rem 0.75rem;
   border: none;
-  border-left: 1px solid rgba($primary, 0.08);
+  border-left: 1px solid $tint-hover;
   background: transparent;
   cursor: pointer;
   font: inherit;
@@ -192,7 +192,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.15rem 0.75rem;
-  border-bottom: 1px solid rgba($primary, 0.06);
+  border-bottom: 1px solid $primary-tint;
 }
 
 .notify-dropdown__title {
@@ -225,7 +225,7 @@
   &::-webkit-scrollbar { width: 3px; }
   &::-webkit-scrollbar-track { background: transparent; }
   &::-webkit-scrollbar-thumb {
-    background: rgba($primary, 0.1);
+    background: $tint-active;
     border-radius: $border-radius-pill;
   }
 }
@@ -275,11 +275,6 @@
     background: rgba($info, 0.12);
     color: darken($info, 8%);
   }
-
-  &--success {
-    background: rgba($success, 0.12);
-    color: darken($success, 6%);
-  }
 }
 
 // Texto + timestamp
@@ -316,7 +311,7 @@
   font-weight: 600;
   color: $primary;
   text-decoration: none;
-  border-top: 1px solid rgba($primary, 0.06);
+  border-top: 1px solid $primary-tint;
   background: rgba($primary, 0.02);
   transition: background-color 0.12s ease, color 0.12s ease;
 

@@ -1,9 +1,14 @@
 <?php
 /**
- * Vista: students/index.php
+ * Vista: consulta_academica/estudiantes/index.php
  * Consulta de Expedientes — listado y búsqueda avanzada de estudiantes.
  *
- * Espera del controlador (opcional, con valores de ejemplo como fallback):
+ * Armada con los mismos componentes que el resto de módulos:
+ * components/page-header.php, components/stat-card.php,
+ * components/avatar.php, components/status-badge.php y
+ * components/data-panel.php.
+ *
+ * Espera del controlador:
  * - array $stats          ['total' => int, 'activos' => int, 'inactivos' => int]
  * - array $estudiantes    cada uno: ['id','nombre','iniciales','avatar_color',
  *                          'avatar_img' (opcional),'cedula_escolar','grado','seccion',
@@ -11,7 +16,7 @@
  * - array $aniosEscolares lista de años escolares para el filtro
  * - array $grados         lista de grados para el filtro
  * - array $secciones      lista de secciones para el filtro
- * - array $filtros        valores actuales de los filtros aplicados (opcional)
+ * - array $filters        valores actuales de los filtros aplicados
  * - array $paginacion     ['desde','hasta','total','pagina_actual','total_paginas']
  *
  * @var array $stats
@@ -19,7 +24,7 @@
  * @var array $aniosEscolares
  * @var array $grados
  * @var array $secciones
- * @var array $filtros
+ * @var array $filters
  * @var array $paginacion
  */
 
@@ -29,224 +34,214 @@ $currentNav      = 'estudiantes';
 
 $breadcrumbs = [
     ['label' => 'Gestión de estudiantes', 'href' => null],
-    ['label' => 'Estudiantes','href' => null],
+    ['label' => 'Estudiantes', 'href' => null],
 ];
 
+$stats          = $stats ?? ['total' => 0, 'activos' => 0, 'inactivos' => 0];
+$estudiantes    = $estudiantes ?? [];
+$aniosEscolares = $aniosEscolares ?? [];
+$grados         = $grados ?? [];
+$secciones      = $secciones ?? [];
+$filters        = $filters ?? ['q' => '', 'anio' => '', 'grado' => '', 'seccion' => '', 'estado' => ''];
+$paginacion     = $paginacion ?? [
+    'desde' => 0, 'hasta' => 0, 'total' => 0, 'pagina_actual' => 1, 'total_paginas' => 1,
+];
+
+$totalEstudiantes   = (int) $stats['total'];
+$pctActivos         = $totalEstudiantes > 0 ? (int) round(((int) $stats['activos'] / $totalEstudiantes) * 100) : 0;
+$pctInactivos       = $totalEstudiantes > 0 ? (int) round(((int) $stats['inactivos'] / $totalEstudiantes) * 100) : 0;
+
 ob_start();
+
+  // ---------- Page header ----------
+  // Sin acciones en el header: el módulo es de consulta y navegación.
+  $pageHeading    = 'Consulta de Expedientes';
+  $pageSubheading = $pageDescription;
+  include __DIR__ . '/../../components/page-header.php';
 ?>
 
-<div class="page-header">
-  <div>
-    <h1 class="page-header__title">Consulta de Expedientes</h1>
-    <p class="page-header__subtitle"><?= htmlspecialchars($pageDescription) ?></p>
-  </div>
-
-  <div class="page-header__actions">
-    <a href="<?= BASE_URL ?>estudiantes/exportar" class="btn btn-outline-primary">
-      <i class="bi bi-download"></i>
-      Exportar CSV
-    </a>
-  </div>
-</div>
-
-<!-- ===================== Tarjetas de resumen ===================== -->
+<!-- ---------- Stat cards ---------- -->
 <div class="row g-3 mb-4">
-
-  <div class="col-sm-6 col-lg-4">
-    <div class="stat-card">
-      <div class="stat-card__top">
-        <div class="stat-card__icon stat-card__icon--primary">
-          <i class="bi bi-mortarboard-fill"></i>
-        </div>
-      </div>
-      <div class="stat-card__label">Total Estudiantes</div>
-      <div class="stat-card__value"><?= number_format((int) $stats['total'], 0, ',', '.') ?></div>
+  <?php
+    $statCards = [
+        [
+            'label'     => 'Total estudiantes',
+            'value'     => number_format($totalEstudiantes, 0, ',', '.'),
+            'icon'      => 'bi-mortarboard-fill',
+            'tone'      => 'primary',
+            'trend'     => 'Matrícula total',
+            'trendType' => 'neutral',
+        ],
+        [
+            'label'     => 'Activos',
+            'value'     => (int) $stats['activos'],
+            'icon'      => 'bi-person-check-fill',
+            'tone'      => 'success',
+            'trend'     => $pctActivos . '% del total',
+            'trendType' => 'up',
+        ],
+        [
+            'label'     => 'Inactivos',
+            'value'     => (int) $stats['inactivos'],
+            'icon'      => 'bi-person-x-fill',
+            'tone'      => 'danger',
+            'trend'     => $pctInactivos . '% del total',
+            'trendType' => 'down',
+        ],
+    ];
+    foreach ($statCards as $card):
+  ?>
+    <div class="col-sm-6 col-lg-4">
+      <?php
+        $statLabel     = $card['label'];
+        $statValue     = $card['value'];
+        $statIcon      = $card['icon'];
+        $statTone      = $card['tone'];
+        $statTrend     = $card['trend'];
+        $statTrendType = $card['trendType'];
+        include __DIR__ . '/../../components/stat-card.php';
+      ?>
     </div>
-  </div>
-
-  <div class="col-sm-6 col-lg-4">
-    <?php $pctActivos = $stats['total'] > 0 ? round(($stats['activos'] / $stats['total']) * 100) : 0; ?>
-    <div class="stat-card">
-      <div class="stat-card__top">
-        <div class="stat-card__icon stat-card__icon--success">
-          <i class="bi bi-person-check-fill"></i>
-        </div>
-        <span class="stat-card__trend stat-card__trend--up"><?= $pctActivos ?>% del total</span>
-      </div>
-      <div class="stat-card__label">Activos</div>
-      <div class="stat-card__value"><?= (int) $stats['activos'] ?></div>
-    </div>
-  </div>
-
-  <div class="col-sm-6 col-lg-4">
-    <?php $pctInactivos = $stats['total'] > 0 ? round(($stats['inactivos'] / $stats['total']) * 100) : 0; ?>
-    <div class="stat-card">
-      <div class="stat-card__top">
-        <div class="stat-card__icon stat-card__icon--danger">
-          <i class="bi bi-person-x-fill"></i>
-        </div>
-        <span class="stat-card__trend stat-card__trend--down"><?= $pctInactivos ?>% del total</span>
-      </div>
-      <div class="stat-card__label">Inactivos</div>
-      <div class="stat-card__value"><?= (int) $stats['inactivos'] ?></div>
-    </div>
-  </div>
-
+  <?php endforeach; ?>
 </div>
 
-<!-- ===================== Panel de filtros ===================== -->
-<div class="content-card mb-4">
-  <div class="content-card__header">
-    <p class="content-card__title">
-      <i class="bi bi-funnel me-2"></i>
-      Filtros de Búsqueda
-    </p>
-  </div>
+<?php
+  // ---------- Data panel: filtros ----------
+  // El filtrado es automático (main.js, form.data-panel__filters): los
+  // <select> y el buscador disparan el panel al cambiar, sin botón de buscar.
+  $panelFormAction = BASE_URL . 'estudiantes/index';
 
-  <form method="get" action="<?= BASE_URL ?>estudiantes/index" class="row g-3 auto-filters">
-    <div class="col-md-4">
-      <label for="filtroBusqueda" class="label-sigde">Nombre o Cédula</label>
-      <div class="input-icon-group">
-        <i class="bi bi-search"></i>
-        <input
-          type="search"
-          id="filtroBusqueda"
-          name="q"
-          class="form-control"
-          placeholder="Ej. Carlos Pérez o 28.123.456"
-          value="<?= htmlspecialchars($filtros['q'] ?? '') ?>"
-        >
-      </div>
-    </div>
+  ob_start();
+  ?>
+  <label for="filtroAnio" class="visually-hidden">Año escolar</label>
+  <select id="filtroAnio" name="anio" class="form-select" aria-label="Filtrar por año escolar">
+    <option value="">Año escolar (Todos)</option>
+    <?php foreach ($aniosEscolares as $anio): ?>
+      <option value="<?= htmlspecialchars($anio) ?>" <?= (string) ($filters['anio'] ?? '') === (string) $anio ? 'selected' : '' ?>>
+        <?= htmlspecialchars($anio) ?>
+      </option>
+    <?php endforeach; ?>
+  </select>
 
-    <div class="col-md-2">
-      <label for="filtroAnio" class="label-sigde">Año Escolar</label>
-      <select id="filtroAnio" name="anio" class="form-select">
-        <?php foreach ($aniosEscolares as $anio): ?>
-          <option value="<?= htmlspecialchars($anio) ?>" <?= ($filtros['anio'] ?? '') === $anio ? 'selected' : '' ?>>
-            <?= htmlspecialchars($anio) ?>
-          </option>
-        <?php endforeach; ?>
-      </select>
-    </div>
+  <label for="filtroGrado" class="visually-hidden">Grado</label>
+  <select id="filtroGrado" name="grado" class="form-select" aria-label="Filtrar por grado">
+    <option value="">Grado (Todos)</option>
+    <?php foreach ($grados as $grado): ?>
+      <option value="<?= htmlspecialchars($grado) ?>" <?= (string) ($filters['grado'] ?? '') === (string) $grado ? 'selected' : '' ?>>
+        <?= htmlspecialchars($grado) ?>
+      </option>
+    <?php endforeach; ?>
+  </select>
 
-    <div class="col-md-2">
-      <label for="filtroGrado" class="label-sigde">Grado</label>
-      <select id="filtroGrado" name="grado" class="form-select">
-        <option value="">Todos los grados</option>
-        <?php foreach ($grados as $grado): ?>
-          <option value="<?= htmlspecialchars($grado) ?>" <?= ($filtros['grado'] ?? '') === $grado ? 'selected' : '' ?>>
-            <?= htmlspecialchars($grado) ?>
-          </option>
-        <?php endforeach; ?>
-      </select>
-    </div>
+  <label for="filtroSeccion" class="visually-hidden">Sección</label>
+  <select id="filtroSeccion" name="seccion" class="form-select" aria-label="Filtrar por sección">
+    <option value="">Sección (Todas)</option>
+    <?php foreach ($secciones as $seccion): ?>
+      <option value="<?= htmlspecialchars($seccion) ?>" <?= (string) ($filters['seccion'] ?? '') === (string) $seccion ? 'selected' : '' ?>>
+        <?= htmlspecialchars($seccion) ?>
+      </option>
+    <?php endforeach; ?>
+  </select>
 
-    <div class="col-md-2">
-      <label for="filtroSeccion" class="label-sigde">Sección</label>
-      <select id="filtroSeccion" name="seccion" class="form-select">
-        <option value="">Todas</option>
-        <?php foreach ($secciones as $seccion): ?>
-          <option value="<?= htmlspecialchars($seccion) ?>" <?= ($filtros['seccion'] ?? '') === $seccion ? 'selected' : '' ?>>
-            <?= htmlspecialchars($seccion) ?>
-          </option>
-        <?php endforeach; ?>
-      </select>
-    </div>
+  <label for="filtroEstado" class="visually-hidden">Estado</label>
+  <select id="filtroEstado" name="estado" class="form-select" aria-label="Filtrar por estado">
+    <option value="">Estado (Cualquiera)</option>
+    <option value="activo" <?= ($filters['estado'] ?? '') === 'activo' ? 'selected' : '' ?>>Activo</option>
+    <option value="inactivo" <?= ($filters['estado'] ?? '') === 'inactivo' ? 'selected' : '' ?>>Inactivo</option>
+  </select>
+  <?php
+  $panelFilters           = ob_get_clean();
+  $panelSearchName        = 'q';
+  $panelSearchValue       = (string) ($filters['q'] ?? '');
+  $panelSearchPlaceholder = 'Buscar por nombre o cédula...';
 
-    <div class="col-md-2">
-      <label for="filtroEstado" class="label-sigde">Estado</label>
-      <select id="filtroEstado" name="estado" class="form-select">
-        <option value="">Cualquiera</option>
-        <option value="activo" <?= ($filtros['estado'] ?? '') === 'activo' ? 'selected' : '' ?>>Activo</option>
-        <option value="inactivo" <?= ($filtros['estado'] ?? '') === 'inactivo' ? 'selected' : '' ?>>Inactivo</option>
-      </select>
-    </div>
+  // ---------- Data panel: colgroup ----------
+  // Anchos fijos: Estudiante / Cédula / Grado y sección / Estado / Acción.
+  ob_start();
+  ?>
+  <colgroup>
+    <col style="width: 30%;">
+    <col style="width: 20%;">
+    <col style="width: 20%;">
+    <col style="width: 15%;">
+    <col style="width: 15%;">
+  </colgroup>
+  <?php
+  $panelColgroup = ob_get_clean();
 
-    <div class="col-12 d-flex justify-content-end align-items-center gap-3">
-      <a href="<?= BASE_URL ?>estudiantes/index" class="link-sigde">Limpiar Filtros</a>
-      <button type="submit" class="btn btn-primary">Aplicar Filtros</button>
-    </div>
-  </form>
-</div>
+  // ---------- Data panel: thead ----------
+  ob_start();
+  ?>
+  <tr>
+    <th scope="col">Nombre completo</th>
+    <th scope="col">Cédula escolar</th>
+    <th scope="col">Grado y sección</th>
+    <th scope="col" class="text-center">Estado</th>
+    <th scope="col" class="text-center">Acciones</th>
+  </tr>
+  <?php
+  $panelTableHead = ob_get_clean();
 
-<!-- ===================== Tabla de estudiantes ===================== -->
-<div class="data-panel">
+  // ---------- Data panel: tbody ----------
+  ob_start();
+  foreach ($estudiantes as $estudiante):
+    $esInactivo = ($estudiante['estado'] ?? '') === 'inactivo';
+  ?>
+    <tr class="<?= $esInactivo ? 'is-muted' : '' ?>">
+      <td>
+        <div class="avatar-group">
+          <?php
+            $avatarSize     = 'md';
+            $avatarTone     = $estudiante['avatar_color'] ?? 'primary';
+            $avatarSrc      = $estudiante['avatar_img'] ?? '';
+            $avatarAlt      = $estudiante['nombre'] ?? '';
+            $avatarInitials = $estudiante['iniciales'] ?? 'ES';
+            include __DIR__ . '/../../components/avatar.php';
+          ?>
+          <span class="avatar-group__name"><?= htmlspecialchars($estudiante['nombre'] ?? '') ?></span>
+        </div>
+      </td>
+      <td class="text-support"><?= htmlspecialchars($estudiante['cedula_escolar'] ?? '') ?></td>
+      <td class="text-support">
+        <?= htmlspecialchars($estudiante['grado'] ?? 'Sin grado') ?>
+        <div class="text-support small">Sección <?= htmlspecialchars($estudiante['seccion'] ?? '—') ?></div>
+      </td>
+      <td class="text-center">
+        <?php
+          $badgeLabel  = $esInactivo ? 'Inactivo' : 'Activo';
+          $badgeStatus = $esInactivo ? 'inactive' : 'active';
+          include __DIR__ . '/../../components/status-badge.php';
+        ?>
+      </td>
+      <td class="text-center">
+        <div class="data-panel__actions">
+          <a href="<?= BASE_URL ?>estudiantes/show/<?= (int) ($estudiante['id'] ?? 0) ?>"
+             class="action-btn action-btn--view" title="Ver expediente">
+            <i class="bi bi-eye"></i>
+          </a>
+        </div>
+      </td>
+    </tr>
+  <?php endforeach; ?>
+  <?php if (!$estudiantes): ?>
+    <tr>
+      <td colspan="5" class="text-center text-support py-4">
+        No se encontraron estudiantes con los filtros seleccionados.
+      </td>
+    </tr>
+  <?php endif; ?>
+  <?php
+  $panelTableBody = ob_get_clean();
 
-  <div class="data-panel__body">
-    <table class="data-panel__table">
-      <colgroup>
-        <col style="width: 30%;">
-        <col style="width: 20%;">
-        <col style="width: 20%;">
-        <col style="width: 15%;">
-        <col style="width: 15%;">
-      </colgroup>
-      <thead>
-        <tr>
-          <th scope="col">Nombre Completo</th>
-          <th scope="col">Cédula Escolar</th>
-          <th scope="col">Grado y Sección</th>
-          <th scope="col" class="text-center">Estado</th>
-          <th scope="col" class="text-center">Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        <?php foreach ($estudiantes as $e): ?>
-          <?php $esInactivo = $e['estado'] === 'inactivo'; ?>
-          <tr class="<?= $esInactivo ? 'is-muted' : '' ?>">
-            <td>
-              <div class="avatar-group">
-                <span class="avatar avatar--md avatar--<?= htmlspecialchars($e['avatar_color']) ?>">
-                  <?php if (!empty($e['avatar_img'])): ?>
-                    <img src="<?= htmlspecialchars($e['avatar_img']) ?>" alt="">
-                  <?php else: ?>
-                    <?= htmlspecialchars($e['iniciales']) ?>
-                  <?php endif; ?>
-                </span>
-                <span class="avatar-group__name"><?= htmlspecialchars($e['nombre']) ?></span>
-              </div>
-            </td>
-            <td class="text-support"><?= htmlspecialchars($e['cedula_escolar']) ?></td>
-            <td class="text-support"><?= htmlspecialchars($e['grado']) ?> "<?= htmlspecialchars($e['seccion']) ?>"</td>
-            <td class="text-center">
-              <span class="status-badge status-badge--<?= $esInactivo ? 'inactive' : 'active' ?>">
-                <?= $esInactivo ? 'Inactivo' : 'Activo' ?>
-              </span>
-            </td>
-            <td class="text-center">
-              <a href="<?= BASE_URL ?>estudiantes/ficha/<?= (int) $e['id'] ?>"
-                 class="action-btn action-btn--view" title="Ver expediente">
-                <i class="bi bi-eye"></i>
-              </a>
-            </td>
-          </tr>
-        <?php endforeach; ?>
+  $panelSummary = 'Mostrando ' . (int) $paginacion['desde'] . ' a ' . (int) $paginacion['hasta']
+                . ' de ' . number_format((int) $paginacion['total'], 0, ',', '.') . ' expedientes';
+  $panelPagination = [
+      'pagina_actual' => $paginacion['pagina_actual'],
+      'total_paginas' => $paginacion['total_paginas'],
+  ];
 
-        <?php if (empty($estudiantes)): ?>
-          <tr>
-            <td colspan="5" class="text-center text-support py-4">
-              No se encontraron estudiantes con los filtros seleccionados.
-            </td>
-          </tr>
-        <?php endif; ?>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="data-panel__footer">
-    <span>
-      Mostrando <?= (int) $paginacion['desde'] ?> a <?= (int) $paginacion['hasta'] ?>
-      de <?= number_format((int) $paginacion['total'], 0, ',', '.') ?> expedientes
-    </span>
-
-    <?php
-      $paginacionAriaLabel = 'Paginación de expedientes de estudiantes';
-      require __DIR__ . '/../../partials/pagination.php';
-    ?>
-  </div>
-
-</div>
+  include __DIR__ . '/../../components/data-panel.php';
+?>
 
 <?php
 $pageContent = ob_get_clean();

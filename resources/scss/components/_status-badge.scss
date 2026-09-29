@@ -57,9 +57,4 @@
       background: $info;
     }
   }
-  
-  // Variante para etiquetas de rol: misma píldora, sin punto indicador
-&--role::before {
-  display: none;
-}
 }

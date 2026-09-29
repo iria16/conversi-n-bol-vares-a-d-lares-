@@ -5,6 +5,7 @@ namespace App\Models;
 
 use App\Interfaces\Listable;
 use App\Traits\AvatarTrait; // AJUSTA esta ruta si tu AvatarTrait vive en otro namespace
+use App\Traits\PasswordTrait;
 use PDO;
 use RuntimeException;
 use Throwable;
@@ -12,6 +13,7 @@ use Throwable;
 class RecuperacionAccesoModel extends BaseModel implements Listable
 {
     use AvatarTrait;
+    use PasswordTrait;
 
     protected string $table      = 'recuperacion_acceso';
     protected string $primaryKey = 'id_recuperacion';
@@ -166,7 +168,7 @@ class RecuperacionAccesoModel extends BaseModel implements Listable
             'id'           => (int) $row['id_recuperacion'],
             'usuario_id'   => (int) $row['id_usuario'],
             'fecha'        => $ts ? date('d/m/Y', $ts) : '',
-            'hora'         => $ts ? date('h:i a', $ts) : '',
+            'hora'         => $ts ? date('H:i', $ts) : '',
             'nombre'       => $nombre,
             'cargo'        => $row['cargo'] ?? null,
             'usuario'      => $row['nombre_usuario'] ?? '',
@@ -261,7 +263,13 @@ class RecuperacionAccesoModel extends BaseModel implements Listable
             ($row['admin_primer_nombre'] ?? '') . ' ' . ($row['admin_primer_apellido'] ?? '')
         );
 
-        $detalle['fecha_atencion'] = $ts ? date('d/m/Y h:i A', $ts) : null;
+        /* La hora de la atención se guardaba con 'h:i A' ("02:28 PM") mientras
+           la de la solicitud se guardaba con 'h:i a' ("02:28 pm"). Dos formatos
+           distintos en el mismo modal, y a simple vista parecía un dato mal
+           guardado. Ahora las dos son de 24 horas: en un registro de atención
+           importa más no tener que interpretar "PM" a la mitad de leer, y el
+           orden de las horas coincide con el orden real. */
+        $detalle['fecha_atencion'] = $ts ? date('d/m/Y H:i', $ts) : null;
         $detalle['admin_atendio']  = $adminNombre !== '' ? $adminNombre : null;
         $detalle['numero_documento'] = $row['numero_documento'] ?? null;
         $detalle['tipo_documento']   = $row['tipo_documento'] ?? null;
@@ -303,15 +311,7 @@ class RecuperacionAccesoModel extends BaseModel implements Listable
             }
 
             $claveProvisional = $this->generarClaveProvisional();
-
-            $this->pdo->prepare(
-                "UPDATE usuario
-                 SET password_hash = :hash, password_provisional = 1
-                 WHERE id_usuario = :id_usuario"
-            )->execute([
-                'hash'       => password_hash($claveProvisional, PASSWORD_DEFAULT),
-                'id_usuario' => $idUsuario,
-            ]);
+            $this->aplicarClaveProvisional((int) $idUsuario, $claveProvisional);
 
             $usuario = $this->getUsuarioBasico((int) $idUsuario);
 
@@ -366,14 +366,7 @@ class RecuperacionAccesoModel extends BaseModel implements Listable
         $this->pdo->beginTransaction();
 
         try {
-            $this->pdo->prepare(
-                "UPDATE usuario
-                 SET password_hash = :hash, password_provisional = 1
-                 WHERE id_usuario = :id_usuario"
-            )->execute([
-                'hash'       => password_hash($claveProvisional, PASSWORD_DEFAULT),
-                'id_usuario' => $usuarioId,
-            ]);
+            $this->aplicarClaveProvisional($usuarioId, $claveProvisional);
 
             $this->pdo->prepare(
                 "INSERT INTO {$this->table}
@@ -392,33 +385,5 @@ class RecuperacionAccesoModel extends BaseModel implements Listable
         }
 
         return $claveProvisional;
-    }
-
-    public function getUsuarioBasico(int $usuarioId): ?array
-    {
-        $sql = "SELECT
-                    u.id_usuario,
-                    u.nombre_usuario AS usuario,
-                    CONCAT(p.primer_nombre, ' ', p.primer_apellido) AS nombre
-                FROM usuario u
-                INNER JOIN persona p ON p.id_persona = u.id_persona
-                WHERE u.id_usuario = :id";
-
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute(['id' => $usuarioId]);
-
-        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
-    }
-
-    private function generarClaveProvisional(int $longitud = 10): string
-    {
-        $alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
-        $clave    = '';
-
-        for ($i = 0; $i < $longitud; $i++) {
-            $clave .= $alfabeto[random_int(0, strlen($alfabeto) - 1)];
-        }
-
-        return $clave;
     }
 }

@@ -31,7 +31,7 @@ ob_start();
   $pageHeaderActions = ob_get_clean();
   $pageHeading       = 'Asignación Docente';
   $pageSubheading    = $pageDescription;
-  include __DIR__ . '/../components/page-header.php';
+  include __DIR__ . '/../../components/page-header.php';
 ?>
 
 <!-- ---------- Stat cards ---------- -->
@@ -75,7 +75,7 @@ ob_start();
         $statTrend     = $card['trend'];
         $statTrendType = $card['trendType'];
         $statVariant   = $card['variant'] ?? null;
-        include __DIR__ . '/../components/stat-card.php';
+        include __DIR__ . '/../../components/stat-card.php';
       ?>
     </div>
   <?php endforeach; ?>
@@ -176,7 +176,7 @@ ob_start();
               $avatarSrc      = '';
               $avatarAlt      = $docente;
               $avatarInitials = mb_strtoupper(mb_substr($docente, 0, 1));
-              include __DIR__ . '/../components/avatar.php';
+              include __DIR__ . '/../../components/avatar.php';
             ?>
             <span><?= htmlspecialchars($docente) ?></span>
           </div>
@@ -188,7 +188,7 @@ ob_start();
         <?php
           $badgeLabel  = $asignado ? 'Asignado' : 'Pendiente';
           $badgeStatus = $asignado ? 'active' : 'pending';
-          include __DIR__ . '/../components/status-badge.php';
+          include __DIR__ . '/../../components/status-badge.php';
         ?>
       </td>
       <td class="text-center">
@@ -229,7 +229,7 @@ ob_start();
       'total_paginas' => $paginacion['total_paginas'],
   ];
 
-  include __DIR__ . '/../components/data-panel.php';
+  include __DIR__ . '/../../components/data-panel.php';
 ?>
 
 <?php
@@ -246,4 +246,4 @@ $formId = 'formEditarAsignacion';
 include __DIR__ . '/assignment-modal.php';
 
 $pageContent = ob_get_clean();
-require __DIR__ . '/../layouts/app.php';
+require __DIR__ . '/../../layouts/app.php';

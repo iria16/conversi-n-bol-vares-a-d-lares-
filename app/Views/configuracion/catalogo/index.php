@@ -137,7 +137,6 @@ ob_start();
   // se remueve dinámicamente sin recargar la página).
   ob_start();
   ?>
-  <tbody id="catalogoTablaBody">
   <?php foreach ($elementos as $el):
     // La BD guarda el estado en MAYÚSCULA ('ACTIVO' / 'INACTIVO'),
     // ver comentario de CatalogoModel. strtoupper() evita que esto
@@ -183,9 +182,9 @@ ob_start();
       </td>
     </tr>
   <?php endif; ?>
-  </tbody>
   <?php
   $panelTableBody = ob_get_clean();
+  $panelTableBodyId = 'catalogoTablaBody';
 
   $panelSummary = 'Mostrando ' . (int) $paginacion['desde'] . ' a ' . (int) $paginacion['hasta']
                 . ' de ' . (int) $paginacion['total'] . ' elementos';
@@ -208,5 +207,5 @@ require_once __DIR__ . '/modals/create-modal.php';
 require_once __DIR__ . '/modals/edit-modal.php';
 $pageModals = ob_get_clean();
 
-$extraScripts = ['/js/catalogo.js'];
+$extraScripts = ['/js/catalogo.js']; // la version la agrega partials/scripts.php
 include __DIR__ . '/../../layouts/app.php';

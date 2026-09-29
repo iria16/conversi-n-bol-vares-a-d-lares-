@@ -1,22 +1,29 @@
 <?php
 /**
- * Modal: credentials-modal.php
- * Se muestra después de crear un usuario con éxito. cuentas.js llena
- * #credUsuarioNombre y #credPassword vía JS con la respuesta del fetch
- * (nombre del empleado y password_provisional).
- * El usuario NO se muestra aquí: ya lo escribió el propio administrador
- * en el formulario de creación, no es un dato generado por el servidor.
+ * Modal: credentials-modal.php (componente compartido)
+ * Se muestra tras generar una contraseña provisional, tanto al crear
+ * un usuario (cuentas) como al aprobar/restablecer una clave
+ * (recuperación). El JS de cada módulo llena #credUsuarioNombre y
+ * #credPassword vía fetch (nombre + password_provisional).
+ * El usuario NO se muestra en el caso de cuentas: ya lo escribió el
+ * administrador en el formulario de creación.
+ *
+ * Variables opcionales ANTES del include:
+ * - string $credModalTitulo  Título del modal-success.
+ * - string $credModalTexto   Texto, debe contener el <strong id="credUsuarioNombre">.
  */
+$credModalTitulo = $credModalTitulo ?? '¡Usuario creado con éxito!';
+$credModalTexto  = $credModalTexto ?? 'Se generaron las credenciales para <strong id="credUsuarioNombre" aria-live="polite"></strong>. Copia la contraseña provisional a continuación.';
+
 ob_start();
 ?>
 <div class="modal-success text-center">
   <div class="success-icon">
     <span class="success-icon__ring"><i class="bi bi-check-lg" aria-hidden="true"></i></span>
   </div>
-  <p class="modal-success__title">¡Usuario creado con éxito!</p>
+  <p class="modal-success__title"><?php echo $credModalTitulo; ?></p>
   <p class="modal-success__text">
-    Se generaron las credenciales para <strong id="credUsuarioNombre" aria-live="polite"></strong>.
-    Copia la contraseña provisional a continuación.
+    <?php echo $credModalTexto; ?>
   </p>
 
   <div class="credentials-display mb-3">
@@ -46,6 +53,6 @@ $modalFooter = ob_get_clean();
 $modalId     = 'modalCredencialesUsuario';
 $modalTitle  = 'Credenciales generadas';
 $modalStatic = true; // no se cierra al hacer click fuera: evita perder la contraseña sin querer
-include __DIR__ . '/../../../components/modal.php';
+include __DIR__ . '/modal.php';
 
-unset($modalBody, $modalFooter, $modalId, $modalTitle, $modalStatic);
+unset($modalBody, $modalFooter, $modalId, $modalTitle, $modalStatic, $credModalTitulo, $credModalTexto);

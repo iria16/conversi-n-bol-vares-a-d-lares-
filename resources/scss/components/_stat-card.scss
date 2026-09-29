@@ -5,11 +5,9 @@
 // ==========================================================================
 
 .stat-card {
-  background: #fff;
+  @include surface-card;
   border: none;
-  border-radius: $border-radius-xl;
-  box-shadow: $box-shadow-sm;
-  padding: 1.25rem 1.35rem;
+  padding: $card-padding;
   height: 100%;
   position: relative;
   overflow: hidden;
@@ -44,7 +42,7 @@
   flex-shrink: 0;
 
   &--primary {
-    background: rgba($primary, 0.08);
+    background: $tint-hover;
     color: $primary;
   }
 
@@ -111,7 +109,7 @@
 .stat-card__bar {
   height: 4px;
   margin-top: 0.9rem;
-  background: rgba($primary, 0.08);
+  background: $tint-hover;
   border-radius: $border-radius-pill;
   overflow: hidden;
 

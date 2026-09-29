@@ -12,8 +12,8 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #fff;
-  border-right: 1px solid rgba($primary, 0.06);
+  background: $surface;
+  border-right: 1px solid $primary-tint;
   box-shadow: $box-shadow-sm;
 }
 
@@ -24,7 +24,7 @@
   align-items: center;
   gap: 0.65rem;
   padding: 1.25rem 1.25rem 1rem;
-  border-bottom: 1px solid rgba($primary, 0.06);
+  border-bottom: 1px solid $primary-tint;
   flex-shrink: 0;
 }
 
@@ -75,7 +75,7 @@
   &::-webkit-scrollbar { width: 3px; }
   &::-webkit-scrollbar-track { background: transparent; }
   &::-webkit-scrollbar-thumb {
-    background: rgba($primary, 0.1);
+    background: $tint-active;
     border-radius: $border-radius-pill;
   }
 }
@@ -139,8 +139,8 @@
 .sidebar__footer {
   flex-shrink: 0;
   padding: 0.75rem 1rem 1rem;
-  border-top: 1px solid rgba($primary, 0.06);
-  background: #fff; // cubre el nav cuando hay scroll para evitar superposición
+  border-top: 1px solid $primary-tint;
+  background: $surface; // cubre el nav cuando hay scroll para evitar superposición
 }
 
 .sidebar__logout {

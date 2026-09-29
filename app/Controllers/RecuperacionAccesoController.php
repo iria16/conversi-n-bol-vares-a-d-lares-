@@ -5,42 +5,19 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Models\RecuperacionAccesoModel;
+use App\Traits\DetalleJsonTrait;
 use PDO;
 use Throwable;
 
 /**
- * RecuperacionAccesoController
- *
- * Lado del administrador del flujo de recuperación de acceso: atiende las
- * solicitudes que los usuarios envían cuando olvidan su clave y permite
- * restablecer contraseñas directamente.
- *
- * Contexto del flujo completo:
- *  1. El usuario pide recuperar el acceso desde el login
- *     (AuthController::requestRecovery), que crea una solicitud pendiente.
- *  2. El administrador la ve aquí, en el listado, y la aprueba o la rechaza.
- *  3. Al aprobar se genera una contraseña provisional que se le entrega al
- *     usuario; al iniciar sesión con ella, AuthController lo obliga a
- *     cambiarla (cambiarPasswordProvisional).
- *  4. Aparte, el administrador puede restablecer la clave de cualquier
- *     usuario sin que haya una solicitud previa (resetPassword).
- *
- * Es un módulo de solo consulta y transiciones controladas: no se crean ni
- * se editan solicitudes a mano, y las acciones genéricas de escritura de
- * CrudController (store, update, delete, toggleStatus) quedan bloqueadas
- * porque el modelo no implementa las interfaces correspondientes.
- *
- * Vistas: Views/usuarios/recuperacion/.
- *
- * Rutas: `recuperacionAcceso/{accion}`. Las acciones propias (updateEstado,
- * getDetalle, resetPassword) deben estar en el whitelist `$rutasPermitidas`
- * del front controller (public/index.php).
- *
- * @author Logística
- * @package App\Controllers
+ * Lado administrador de la recuperación de acceso: aprueba o rechaza solicitudes (creadas por AuthController::requestRecovery).
+ * Al aprobar genera una clave provisional; también permite restablecer la clave de cualquier usuario sin solicitud.
+ * Vistas en Views/usuarios/recuperacion; updateEstado, getDetalle y resetPassword deben estar en el whitelist de public/index.php.
  */
 class RecuperacionAccesoController extends CrudController
 {
+    use DetalleJsonTrait;
+
     /** Carpeta de vistas del módulo (Views/usuarios/recuperacion). */
     protected string $viewPath    = 'usuarios/recuperacion';
 
@@ -48,22 +25,25 @@ class RecuperacionAccesoController extends CrudController
     protected string $routeName   = 'recuperacionAcceso';
 
     /**
-     * Crea la instancia concreta del modelo cuando sea requerida.
-     *
-     * @param PDO $pdo Conexión abierta por BaseController::getModel().
+     * Devuelve el modelo con su tipo real, porque getModel() retorna ?object y el editor no resuelve sus métodos.
+     * Este envoltorio fija el tipo de createModel() y evita los subrayados rojos.
      */
+    private function modelo(): RecuperacionAccesoModel
+    {
+        /** @var RecuperacionAccesoModel $model */
+        $model = $this->getModel();
+
+        return $model;
+    }
+
     protected function createModel(PDO $pdo): object
     {
         return new RecuperacionAccesoModel($pdo);
     }
 
     /**
-     * Metadatos de presentación de cada estado de solicitud.
-     *
-     * La clave es el estado tal como lo devuelve el modelo (en minúsculas).
-     * `label` es el texto que ve el usuario y `clase` es la variante del
-     * componente visual de estado (status-badge). Se la paso a la vista
-     * como $estadosMeta para que no repita este mapa.
+     * Etiqueta y clase visual (status-badge) de cada estado, con la clave en minúsculas como la devuelve el modelo.
+     * Se pasa a la vista como $estadosMeta para que no repita este mapa.
      */
     private const ESTADOS_META = [
         'pendiente' => ['label' => 'Pendiente', 'clase' => 'pending'],
@@ -74,7 +54,7 @@ class RecuperacionAccesoController extends CrudController
     /**
      * Lee los filtros del listado desde la URL (gancho de ListableIndexTrait).
      *
-     * @return array{estado: string, q: string} Estado de la solicitud y texto de búsqueda.
+     * @return array{estado: string, q: string}
      */
     protected function getFiltersFromRequest(): array
     {
@@ -85,20 +65,12 @@ class RecuperacionAccesoController extends CrudController
     }
 
     /**
-     * Variables extra que necesita la vista de listado.
-     *
-     *  - solicitudes:         filas de la página actual.
-     *  - stats:               contadores para las tarjetas de resumen.
-     *  - estadosMeta:         etiquetas y clases de cada estado (ESTADOS_META).
-     *  - usuariosDisponibles: usuarios entre los que elegir en el
-     *                         restablecimiento manual de contraseña.
-     *
-     * @param array $items   Filas de la página actual.
-     * @param array $filters Filtros aplicados.
+     * Variables extra del listado: solicitudes, stats, estadosMeta (ESTADOS_META)
+     * y usuariosDisponibles (para el restablecimiento manual de contraseña).
      */
     protected function getExtraIndexData(array $items, array $filters): array
     {
-        $model = $this->getModel();
+        $model = $this->modelo();
 
         return [
             'solicitudes'         => $items,
@@ -109,8 +81,7 @@ class RecuperacionAccesoController extends CrudController
     }
 
     /**
-     * Este módulo no admite creación manual: la genera el usuario final
-     * desde el flujo de recuperación, no el admin.
+     * No admite creación manual: la solicitud la genera el usuario final desde el flujo de recuperación.
      */
     public function create(): void
     {
@@ -119,8 +90,7 @@ class RecuperacionAccesoController extends CrudController
     }
 
     /**
-     * Tampoco hay edición directa: las únicas transiciones válidas son
-     * aprobar/rechazar, manejadas por updateEstado().
+     * No admite edición directa: las únicas transiciones válidas son aprobar/rechazar, en updateEstado().
      */
     public function edit(): void
     {
@@ -129,25 +99,13 @@ class RecuperacionAccesoController extends CrudController
     }
 
     // store(), update(), delete() y toggleStatus() no se sobrescriben:
-    // RecuperacionAccesoModel no implementa Creatable/Updatable/
-    // Deletable/Toggleable, así que si alguien las invoca por error
-    // heredan el comportamiento 405 de CrudController automáticamente.
+    // el modelo no implementa Creatable/Updatable/Deletable/Toggleable,
+    // así que heredan el 405 de CrudController.
 
     /**
-     * Aprueba o rechaza una solicitud pendiente.
-     * Ruta: recuperacionAcceso/updateEstado (POST, responde JSON).
-     *
-     * Recibe `id` de la solicitud y `accion` ('aprobar' o 'rechazar');
-     * cualquier otro valor responde 400. Registra en el modelo qué usuario
-     * atendió la solicitud (idUsuarioActual()).
-     *
-     *  - aprobar:  el modelo genera una contraseña provisional y la devuelvo
-     *              en `data` para que el administrador se la entregue al usuario.
-     *  - rechazar: solo cambia el estado.
-     *
-     * En ambos casos, si el modelo devuelve null/false es porque la solicitud
-     * ya fue atendida o no existe, y respondo 409. Así dos administradores no
-     * pueden procesar la misma solicitud a la vez.
+     * Aprueba o rechaza una solicitud pendiente (recuperacionAcceso/updateEstado, POST, JSON).
+     * Recibe `id` y `accion` ('aprobar' o 'rechazar'); aprobar devuelve la clave provisional en `data`.
+     * Si el modelo devuelve null/false la solicitud ya fue atendida o no existe (409), evitando doble proceso.
      */
     public function updateEstado(): void
     {
@@ -158,7 +116,7 @@ class RecuperacionAccesoController extends CrudController
             $this->jsonResponse(false, null, 'Solicitud inválida.', 400);
         }
 
-        $model = $this->getModel();
+        $model = $this->modelo();
 
         try {
             if ($accion === 'aprobar') {
@@ -184,47 +142,23 @@ class RecuperacionAccesoController extends CrudController
     }
 
     /**
-     * Devuelve el detalle de una solicitud en JSON (modal "Ver detalle").
-     * Ruta: recuperacionAcceso/getDetalle?id=... (GET).
-     *
-     * Respuestas: 400 si el ID es inválido, 404 si la solicitud no existe,
-     * 500 si el modelo falla y 200 con el detalle si todo sale bien.
+     * Devuelve el detalle de una solicitud en JSON para el modal (recuperacionAcceso/getDetalle?id=..., GET).
+     * Delega el flujo estándar 400/404/500/200 en responderDetalle() de DetalleJsonTrait.
      */
     public function getDetalle(): void
     {
-        $id = (int) ($_GET['id'] ?? 0);
-
-        if ($id <= 0) {
-            $this->jsonResponse(false, null, 'ID inválido.', 400);
-        }
-
-        $model = $this->getModel();
-
-        try {
-            $detalle = $model->getDetalleSolicitud($id);
-
-            if (!$detalle) {
-                $this->jsonResponse(false, null, 'La solicitud no existe.', 404);
-            }
-
-            $this->jsonResponse(true, $detalle);
-        } catch (Throwable $e) {
-            $this->jsonError($e, 'Recuperación de Acceso');
-        }
+        $this->responderDetalle(
+            'getDetalleSolicitud',
+            'ID inválido.',
+            'La solicitud no existe.',
+            'Recuperación de Acceso'
+        );
     }
 
     /**
-     * Restablece manualmente la contraseña de un usuario, sin solicitud previa.
-     * Ruta: recuperacionAcceso/resetPassword (POST, responde JSON).
-     *
-     * Recibe `usuario_id`. El modelo genera la clave provisional (registrando
-     * qué administrador la solicitó) y devuelvo en `data`: la clave, el nombre
-     * de usuario y el nombre de la persona, para mostrarlos en el modal y que
-     * el administrador se los entregue. Si no se encuentran los datos básicos
-     * del usuario, esos dos campos salen como cadena vacía.
-     *
-     * Ojo: la clave viaja en la respuesta JSON, así que no debe escribirse en
-     * logs ni guardarse en el front más allá de mostrarla.
+     * Restablece la contraseña de un usuario sin solicitud previa (recuperacionAcceso/resetPassword, POST, JSON).
+     * Devuelve en `data` la clave provisional, el usuario y el nombre para mostrarlos en el modal.
+     * Ojo: la clave viaja en el JSON, así que no debe escribirse en logs ni guardarse en el front.
      */
     public function resetPassword(): void
     {
@@ -234,7 +168,7 @@ class RecuperacionAccesoController extends CrudController
             $this->jsonResponse(false, null, 'Debes seleccionar un usuario.', 400);
         }
 
-        $model = $this->getModel();
+        $model = $this->modelo();
 
         try {
             $claveProvisional = $model->resetPassword($usuarioId, $this->idUsuarioActual());

@@ -13,52 +13,23 @@ use function App\Traits\sigde_rol_clave;
 use PDO;
 
 /**
- * AuthController
- *
- * Controlador de autenticación de SIGDE. Aquí concentro todo el ciclo de
- * acceso al sistema:
- *
- *  - Inicio de sesión (con bloqueo temporal por intentos fallidos).
- *  - Cambio obligatorio de contraseña provisional.
- *  - Solicitud de recuperación de acceso (la atiende un administrador).
- *  - Cierre de sesión.
- *
- * Decisiones que tomé y que conviene recordar:
- *
- *  1. Este controlador se usa también para mostrar el login. Por eso el
- *     constructor redirige al dashboard si el usuario YA tiene sesión, salvo
- *     en las acciones listadas en ACCIONES_EXENTAS.
- *  2. Los mensajes al usuario se muestran con SweetAlert2: guardo el mensaje
- *     en $_SESSION['swal'] y redirijo; la vista lo imprime una sola vez.
- *  3. El nombre del usuario se guarda en sesión SIN escapar. El escape
- *     (htmlspecialchars) se hace en la vista al imprimirlo.
- *  4. Todas las acciones terminan en redirección (o `never`), nunca
- *     siguen ejecutando después de mostrar un error.
- *
- * Dependencias:
- *  - SecurityTrait: aporta redireccionar(), validarPasswordFuerte() y
- *    destruirSesionPorBloqueo().
- *  - LoginModel / RecoveryModel / BitacoraModel: acceso a datos por PDO.
- *
- * @author Logística
- * @package App\Controllers
+ * Controlador de autenticación de SIGDE: login con bloqueo por intentos, cambio de clave provisional,
+ * recuperación de acceso (la atiende un administrador) y logout. Los avisos usan SweetAlert2 vía $_SESSION['swal'].
+ * El nombre se guarda sin escapar en sesión; el escape (htmlspecialchars) se hace en la vista.
  */
 class AuthController
 {
     use SecurityTrait;
 
     /**
-     * Hash señuelo con formato bcrypt válido. Se verifica contra él cuando el
-     * usuario no existe, para que el tiempo de respuesta sea equivalente al de
-     * un usuario real y no se pueda enumerar cuentas midiendo la latencia.
+     * Hash bcrypt señuelo: se verifica cuando el usuario no existe para igualar el tiempo de respuesta.
+     * Así no se pueden enumerar cuentas midiendo la latencia.
      */
     private const HASH_SENUELO = '$2y$10$usesomesillystringfore7hnbRJHxXVLeakoG8K30oukPsA.ztMG';
 
     /**
-     * Acciones que no deben redirigir aunque ya haya sesión activa.
-     * Van en minúsculas porque accionActual() normaliza el segmento con
-     * mb_strtolower(). Si agrego una acción nueva que un usuario logueado
-     * deba poder abrir en este controlador, tengo que añadirla aquí.
+     * Acciones que no redirigen aunque haya sesión activa (en minúsculas, como las devuelve accionActual()).
+     * Si agrego otra acción que un usuario logueado deba abrir aquí, hay que añadirla a esta lista.
      */
     private const ACCIONES_EXENTAS = [
         'logout',
@@ -66,7 +37,7 @@ class AuthController
         'updatepassword',
     ];
 
-    /** Conexión PDO compartida por los tres modelos de este controlador. */
+    /** Conexión PDO compartida por los tres modelos. */
     private PDO $db;
 
     /** Modelo de login: usuarios, intentos fallidos, bloqueo y cambio de clave. */
@@ -79,19 +50,8 @@ class AuthController
     private BitacoraModel $bitacora;
 
     /**
-     * Inicializa la conexión y los modelos, y aplica la regla de "quien ya
-     * tiene sesión no debería ver el login".
-     *
-     * Flujo cuando hay sesión activa y la acción NO está exenta:
-     *  1. Reviso si la cuenta fue bloqueada mientras estaba logueado; si es así
-     *     destruyo la sesión (destruirSesionPorBloqueo termina la ejecución).
-     *  2. Si arrastra una clave provisional, lo mando a cambiarla: no puede
-     *     navegar a ningún otro lado hasta hacerlo.
-     *  3. En cualquier otro caso lo envío al dashboard, que resuelve el
-     *     destino según el rol.
-     *
-     * Si no hay sesión, o la acción es exenta, el constructor simplemente
-     * termina y deja correr la acción pedida.
+     * Inicializa conexión y modelos; si ya hay sesión y la acción no es exenta, redirige.
+     * Destruye la sesión si la cuenta fue bloqueada, fuerza el cambio de clave provisional o va al dashboard.
      */
     public function __construct()
     {
@@ -124,17 +84,8 @@ class AuthController
     }
 
     /**
-     * Devuelve el segmento de acción de la URL actual (controlador/accion/...),
-     * en minúsculas. Comparación exacta por segmento en lugar de strpos sobre
-     * la URI completa, que da falsos positivos.
-     *
-     * Pasos:
-     *  1. Tomo solo el path de REQUEST_URI (sin query string).
-     *  2. Le quito el prefijo de BASE_URL si la app corre en una subcarpeta.
-     *  3. Separo por "/" y descarto segmentos vacíos.
-     *  4. El segmento [0] es el controlador y el [1] la acción.
-     *
-     * @return string Acción en minúsculas, o cadena vacía si no hay.
+     * Devuelve la acción de la URL actual (segmento [1]) en minúsculas, sin query ni BASE_URL.
+     * Compara por segmento en vez de strpos sobre la URI, que da falsos positivos.
      */
     private function accionActual(): string
     {
@@ -151,9 +102,7 @@ class AuthController
     }
 
     /**
-     * Muestra el formulario de inicio de sesión.
-     * Ruta: auth/login (GET).
-     *
+     * Muestra el formulario de login (auth/login, GET).
      * Si ya hay sesión, el constructor redirige antes de llegar aquí.
      */
     public function login(): void
@@ -162,30 +111,9 @@ class AuthController
     }
 
     /**
-     * Procesa el envío del formulario de login.
-     * Ruta: auth/authenticate (POST).
-     *
-     * Flujo:
-     *  1. Solo acepto POST; cualquier otro método vuelve al login.
-     *  2. Valido que usuario y contraseña no vengan vacíos.
-     *  3. Busco el usuario. Si no existe, verifico la contraseña contra
-     *     HASH_SENUELO para igualar el tiempo de respuesta y devuelvo el mismo
-     *     mensaje genérico que para una clave incorrecta (evita enumerar cuentas).
-     *  4. Si la cuenta está bloqueada, aviso cuántos minutos faltan.
-     *  5. Si la contraseña es correcta: reinicio los intentos, regenero el ID
-     *     de sesión (contra session fixation), cargo los datos de sesión,
-     *     registro el LOGIN en bitácora y redirijo:
-     *       - a cambiarPasswordProvisional si la clave es provisional;
-     *       - a la URL guardada en redirect_after_login, o al dashboard.
-     *  6. Si es incorrecta: registro el intento fallido. Al llegar a
-     *     LoginModel::MAX_INTENTOS la cuenta queda bloqueada; si no, aviso
-     *     cuántos intentos quedan.
-     *
-     * En sesión guardo: usuario_id, nombre, rol (normalizado con
-     * sigde_rol_clave) y password_provisional. last_usuario sirve solo para
-     * repoblar el campo del formulario tras un error.
-     *
-     * @return void Siempre termina en redirección.
+     * Procesa el login (auth/authenticate, POST) y siempre termina en redirección.
+     * Usa mensaje genérico y HASH_SENUELO si el usuario no existe, controla el bloqueo y registra intentos fallidos.
+     * Si acierta: reinicia intentos, regenera el ID de sesión, guarda datos en sesión y registra LOGIN en bitácora.
      */
     public function authenticate(): void
     {
@@ -246,10 +174,21 @@ class AuthController
                 $this->redireccionar('auth/cambiarPasswordProvisional');
             }
 
-            $destino = $_SESSION['redirect_after_login'] ?? 'dashboard/index';
-            unset($_SESSION['redirect_after_login']);
+            /* Siempre al dashboard, sin importar de dónde se venga.
 
-            $this->redireccionar($destino);
+               Antes se honraba `redirect_after_login`, que el middleware
+               guardaba con la URL que se estaba intentando abrir. Sedeed
+               sentido: si a alguien le mandan un enlace a un módulo y entra con
+               la sesión vencida, llegaba directo. Pero en la práctica hacía algo
+               peor: al cerrar sesión a propósito y volver a entrar, la persona
+               caía en el módulo donde había cerrado, y no en el dashboard. Como
+               el cierre es intencional, la pantalla de entrada debería ser
+               siempre la misma, no depender del último lugar. Eso se pidió
+               explícitamente y es la razón de este cambio.
+
+               La clave de sesión ya no se escribe en SecurityTrait; si algún día
+               volviera a hacer falta, se tiene que volver a guardar ahí. */
+            $this->redireccionar('dashboard/index');
         }
 
         // Manejo de intento fallido
@@ -281,13 +220,9 @@ class AuthController
     }
 
     /**
-     * Muestra el formulario para cambiar la contraseña provisional.
-     * Ruta: auth/cambiarPasswordProvisional (GET).
-     *
-     * Requiere sesión iniciada. Si en base de datos la clave ya no es
-     * provisional (por ejemplo, ya la cambió en otra pestaña), limpio la marca
-     * de sesión y lo mando al dashboard en lugar de mostrar el formulario.
-     * Es una acción exenta en el constructor para evitar un bucle de redirección.
+     * Muestra el formulario de cambio de clave provisional (auth/cambiarPasswordProvisional, GET).
+     * Si en BD la clave ya no es provisional, limpia la marca de sesión y va al dashboard.
+     * Es acción exenta en el constructor para evitar un bucle de redirección.
      */
     public function cambiarPasswordProvisional(): void
     {
@@ -306,20 +241,9 @@ class AuthController
     }
 
     /**
-     * Guarda la nueva contraseña definitiva.
-     * Ruta: auth/updatePassword (POST). Acción exenta en el constructor.
-     *
-     * Validaciones, en orden:
-     *  1. Método POST y sesión activa.
-     *  2. Ambos campos completos.
-     *  3. Coincidencia entre nueva y confirmación (hash_equals).
-     *  4. Fortaleza, con validarPasswordFuerte() de SecurityTrait, que
-     *     devuelve true o el mensaje del problema encontrado.
-     *
-     * Si todo pasa, actualizo la clave (LoginModel se encarga del hash y de
-     * quitar la marca de provisional), registro CAMBIO_PASSWORD en bitácora y
-     * cierro la sesión a propósito: obligo a iniciar sesión de nuevo con la
-     * clave nueva.
+     * Guarda la nueva contraseña (auth/updatePassword, POST; acción exenta en el constructor).
+     * Valida método, sesión, campos completos, coincidencia (hash_equals) y fortaleza (validarPasswordFuerte()).
+     * Si todo pasa, actualiza la clave, registra CAMBIO_PASSWORD y cierra la sesión para exigir un nuevo login.
      */
     public function updatePassword(): void
     {
@@ -370,8 +294,7 @@ class AuthController
     }
 
     /**
-     * Muestra el formulario de "recuperar acceso".
-     * Ruta: auth/recoverAccess (GET).
+     * Muestra el formulario de recuperar acceso (auth/recoverAccess, GET).
      */
     public function recoverAccess(): void
     {
@@ -379,18 +302,9 @@ class AuthController
     }
 
     /**
-     * Registra una solicitud de recuperación de acceso para el administrador.
-     * Ruta: auth/requestRecovery (POST).
-     *
-     * El usuario escribe su nombre de usuario o su cédula. No se envía ninguna
-     * clave por correo: se crea una solicitud que el administrador atiende
-     * desde su panel (y que normalmente termina en una clave provisional).
-     *
-     * Casos:
-     *  - Campo vacío: aviso y vuelvo al formulario.
-     *  - Usuario/cédula inexistente: aviso "No encontrado".
-     *  - Ya hay una solicitud pendiente: no creo otra, aviso y voy al login.
-     *  - Caso normal: creo la solicitud y confirmo el envío.
+     * Registra una solicitud de recuperación para el administrador (auth/requestRecovery, POST).
+     * El usuario indica su usuario o cédula; no se envía clave por correo, el administrador la atiende.
+     * Avisa si el campo está vacío, no existe el usuario o ya hay una solicitud pendiente.
      */
     public function requestRecovery(): void
     {
@@ -420,13 +334,8 @@ class AuthController
     }
 
     /**
-     * Cierra la sesión del usuario.
-     * Ruta: auth/logout. Acción exenta en el constructor.
-     *
-     * Registro LOGOUT en bitácora (si había sesión), vacío $_SESSION, borro
-     * la cookie de sesión con los mismos parámetros con que se creó, destruyo
-     * la sesión y abro una nueva. Esa sesión nueva es necesaria para poder
-     * guardar el mensaje flash de SweetAlert antes de redirigir al login.
+     * Cierra la sesión (auth/logout; acción exenta): registra LOGOUT, vacía $_SESSION y borra la cookie.
+     * Luego destruye la sesión y abre una nueva para poder guardar el mensaje flash de SweetAlert.
      */
     public function logout(): void
     {
@@ -450,16 +359,8 @@ class AuthController
     }
 
     /**
-     * Guarda un mensaje flash para SweetAlert2 y redirige.
-     *
-     * Es mi atajo para todos los avisos del controlador: como devuelve
-     * `never`, el código que viene después de llamarlo no se ejecuta, así que
-     * no hace falta poner return ni exit en cada rama.
-     *
-     * @param string $icono  Ícono de SweetAlert2: success | error | warning | info.
-     * @param string $titulo Título del cuadro de diálogo.
-     * @param string $texto  Mensaje descriptivo para el usuario.
-     * @param string $ruta   Destino con formato controlador/accion.
+     * Guarda un mensaje flash de SweetAlert2 (success | error | warning | info) y redirige a 'controlador/accion'.
+     * Devuelve `never`, así que el código posterior no se ejecuta y no hace falta return ni exit.
      */
     private function mostrarSwalYRedirigir(string $icono, string $titulo, string $texto, string $ruta): never
     {

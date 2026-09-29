@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', function () {
   initCrearUsuarioForm();
   initVerUsuarioModal();
   initEditarUsuarioModal();
-  initCopyToClipboardButtons();
+  SIGDEUI.copiarAlPortapapeles();
 });
 
 var baseUrl = window.BASE_URL || '';
@@ -36,20 +36,11 @@ function initToggleEstadoUsuario() {
     var badge = tr ? tr.querySelector('.status-badge') : null;
 
     var confirmacion = false;
-    if (window.Swal) {
-      var result = await Swal.fire({
-        title: accion.charAt(0).toUpperCase() + accion.slice(1) + ' usuario?',
-        text: '¿Está seguro que desea ' + accion + ' esta cuenta de usuario?',
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'Sí, ' + accion,
-        cancelButtonText: 'Cancelar',
-        reverseButtons: true
-      });
-      confirmacion = result.isConfirmed;
-    } else {
-      confirmacion = confirm('¿Está seguro que desea ' + accion + ' esta cuenta de usuario?');
-    }
+    confirmacion = await SIGDEUI.confirmar({
+      titulo: accion.charAt(0).toUpperCase() + accion.slice(1) + ' usuario?',
+      texto: '¿Está seguro que desea ' + accion + ' esta cuenta de usuario?',
+      confirmar: 'Sí, ' + accion
+    });
 
     if (!confirmacion) {
       checkbox.checked = checkboxAnterior;
@@ -57,16 +48,12 @@ function initToggleEstadoUsuario() {
     }
 
     try {
-      var res = await fetch(baseUrl + rutaControlador + '/toggleStatus', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'id=' + encodeURIComponent(id)
-      });
-      var data = await res.json();
+      var res = await SIGDEUI.enviar(baseUrl + rutaControlador + '/toggleStatus', { metodo: 'POST', cuerpo: 'id=' + encodeURIComponent(id), cabeceras: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+      var data = res.data;
 
       if (!data.ok) {
         checkbox.checked = checkboxAnterior;
-        mostrarError('No se pudo actualizar el estado del usuario.');
+        SIGDEUI.mostrarError('No se pudo actualizar el estado del usuario.');
         return;
       }
 
@@ -88,18 +75,10 @@ function initToggleEstadoUsuario() {
       }
       actualizarStatsEstado(nuevoEstadoActivo);
 
-      if (window.Swal) {
-        Swal.fire({
-          title: '¡Listo!',
-          text: 'Usuario ' + accion + 'do correctamente.',
-          icon: 'success',
-          timer: 1500,
-          showConfirmButton: false
-        });
-      }
+      SIGDEUI.exito('Usuario ' + accion + 'do correctamente.', '¡Listo!');
     } catch (err) {
       checkbox.checked = checkboxAnterior;
-      mostrarError('Error de conexión al actualizar el estado.');
+      SIGDEUI.mostrarError('Error de conexión al actualizar el estado.');
     }
   });
 }
@@ -204,7 +183,7 @@ function initCrearUsuarioForm() {
   aplicarValidacionSelectRequerido(document.getElementById('nuRol'), 'Debe seleccionar un rol.');
 
   if (modalCredencialesEl) {
-    modalCredencialesEl.addEventListener('hidden.bs.modal', function () {
+    SIGDEUI.alCerrarModal(modalCredencialesEl, function recargarTrasCredenciales() {
       window.location.reload();
     });
   }
@@ -223,11 +202,11 @@ function initCrearUsuarioForm() {
     }
 
     try {
-      var res = await fetch(baseUrl + rutaControlador + '/store', { method: 'POST', body: new FormData(formCrear) });
-      var data = await res.json();
+      var res = await SIGDEUI.enviar(baseUrl + rutaControlador + '/store', { metodo: 'POST', cuerpo: new FormData(formCrear) });
+      var data = res.data;
 
       if (!res.ok || !data.ok) {
-        mostrarError(data.mensaje || 'No se pudo crear el usuario. Verifique los datos.', 'Error al crear usuario');
+        SIGDEUI.mostrarError(data.mensaje || 'No se pudo crear el usuario. Verifique los datos.', 'Error al crear usuario');
         return;
       }
 
@@ -244,7 +223,7 @@ function initCrearUsuarioForm() {
       if (modalCredencialesEl) new bootstrap.Modal(modalCredencialesEl).show();
     } catch (err) {
       console.error('Error al procesar petición AJAX:', err);
-      mostrarError('Ocurrió un fallo de conexión al crear el usuario.');
+      SIGDEUI.mostrarError('Ocurrió un fallo de conexión al crear el usuario.');
     } finally {
       if (btnGuardar) {
         btnGuardar.disabled = false;
@@ -270,18 +249,17 @@ function initVerUsuarioModal() {
 
     var id = btnVer.dataset.id;
 
-    fetch(baseUrl + rutaControlador + '/getDetalle?id=' + encodeURIComponent(id))
-      .then(function (res) { return res.json(); })
-      .then(function (data) {
-        if (!data.ok) {
-          mostrarError(data.mensaje || 'No se pudo cargar el detalle del usuario.');
+    SIGDEUI.enviar(baseUrl + rutaControlador + '/getDetalle?id=' + encodeURIComponent(id))
+      .then(function (r) {
+        if (!r.ok || !r.data.ok) {
+          SIGDEUI.mostrarError((r.data && r.data.mensaje) || 'No se pudo cargar el detalle del usuario.');
           return;
         }
-        pintarDetalleUsuario(modalVerEl, data.data);
-        bootstrap.Modal.getOrCreateInstance(modalVerEl).show();
+        pintarDetalleUsuario(modalVerEl, r.data.data);
+        SIGDEUI.mostrarModal(modalVerEl);
       })
       .catch(function () {
-        mostrarError('Fallo de conexión al cargar el detalle.');
+        SIGDEUI.mostrarError('Fallo de conexión al cargar el detalle.');
       });
   });
 }
@@ -369,7 +347,7 @@ function initEditarUsuarioModal() {
     if (selectRol) selectRol.dispatchEvent(new Event('change'));
 
     modalEditarEl.querySelector('form') && modalEditarEl.querySelector('form').classList.remove('was-validated');
-    bootstrap.Modal.getOrCreateInstance(modalEditarEl).show();
+    SIGDEUI.mostrarModal(modalEditarEl);
   });
 
   var formEditar = modalEditarEl.querySelector('#formEditarUsuario');
@@ -393,15 +371,15 @@ function initEditarUsuarioModal() {
 
     try {
       var formData = new FormData(formEditar);
-      var res = await fetch(baseUrl + rutaControlador + '/update', { method: 'POST', body: formData });
-      var data = await res.json();
+      var res = await SIGDEUI.enviar(baseUrl + rutaControlador + '/update', { metodo: 'POST', cuerpo: formData });
+      var data = res.data;
 
       if (!res.ok || !data.ok) {
-        mostrarError(data.mensaje || 'No se pudo actualizar el usuario.', 'Error al editar usuario');
+        SIGDEUI.mostrarError(data.mensaje || 'No se pudo actualizar el usuario.', 'Error al editar usuario');
         return;
       }
 
-      bootstrap.Modal.getOrCreateInstance(modalEditarEl).hide();
+      SIGDEUI.ocultarModal(modalEditarEl);
 
       if (data.data) {
         var u = data.data;
@@ -422,12 +400,10 @@ function initEditarUsuarioModal() {
         }
       }
 
-      if (window.Swal) {
-        Swal.fire({ icon: 'success', title: 'Actualizado', text: data.mensaje || 'Usuario actualizado correctamente.', timer: 2000, showConfirmButton: false });
-      }
+      SIGDEUI.exito(data.mensaje || 'Usuario actualizado correctamente.', 'Actualizado', 2000);
     } catch (err) {
       console.error('Error al procesar petición AJAX:', err);
-      mostrarError('Ocurrió un fallo de conexión al editar el usuario.');
+      SIGDEUI.mostrarError('Ocurrió un fallo de conexión al editar el usuario.');
     } finally {
       if (btnGuardar) {
         btnGuardar.disabled = false;
@@ -437,39 +413,7 @@ function initEditarUsuarioModal() {
   });
 }
 
-function initCopyToClipboardButtons() {
-  document.addEventListener('click', function (e) {
-    var btn = e.target.closest('.credentials-display__copy');
-    if (!btn) return;
-
-    var targetId = btn.dataset.copyTarget;
-    var targetEl = targetId ? document.getElementById(targetId) : null;
-    if (!targetEl) return;
-
-    var texto = targetEl.textContent || '';
-    if (!navigator.clipboard) return;
-
-    navigator.clipboard.writeText(texto).then(function () {
-      var icono = btn.querySelector('i');
-      if (!icono) return;
-      var claseOriginal = icono.className;
-      icono.className = 'bi bi-check-lg';
-      setTimeout(function () { icono.className = claseOriginal; }, 1200);
-    }).catch(function () {
-      mostrarError('No se pudo copiar al portapapeles.');
-    });
-  });
-}
-
 /* ── Utilidades ─────────────────────────────────────────────────── */
-
-function mostrarError(mensaje, titulo) {
-  if (window.Swal) {
-    Swal.fire({ icon: 'error', title: titulo || 'Error', text: mensaje });
-  } else {
-    alert((titulo ? titulo + '\n' : '') + mensaje);
-  }
-}
 
 /**
  * Replica ucwords(mb_strtolower($str, 'UTF-8')) de PHP, usado en

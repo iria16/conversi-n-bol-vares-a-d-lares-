@@ -966,6 +966,7 @@ CREATE TABLE `tipo_institucion` (
 CREATE TABLE `titulo` (
   `id_titulo` int(11) NOT NULL,
   `nombre` varchar(100) NOT NULL,
+  `id_grado_academico` int(11) NOT NULL,
   `estado` enum('ACTIVO','INACTIVO') NOT NULL DEFAULT 'ACTIVO'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
@@ -1317,7 +1318,8 @@ ALTER TABLE `tipo_institucion`
 --
 ALTER TABLE `titulo`
   ADD PRIMARY KEY (`id_titulo`),
-  ADD UNIQUE KEY `nombre` (`nombre`);
+  ADD UNIQUE KEY `uk_titulo_nombre_grado` (`nombre`, `id_grado_academico`),
+  ADD KEY `fk_titulo_grado_academico` (`id_grado_academico`);
 
 --
 -- Indices de la tabla `turno`
@@ -1735,6 +1737,13 @@ ALTER TABLE `retiro`
 --
 ALTER TABLE `talla_uniforme`
   ADD CONSTRAINT `fk_talla_uniforme_estudiante` FOREIGN KEY (`id_estudiante`) REFERENCES `estudiante` (`id_estudiante`) ON UPDATE CASCADE;
+
+--
+-- Filtros para la tabla `titulo`
+--
+
+ALTER TABLE `titulo`
+  ADD CONSTRAINT `fk_titulo_grado_academico` FOREIGN KEY (`id_grado_academico`) REFERENCES `grado_academico` (`id_grado_academico`) ON UPDATE CASCADE;
 
 --
 -- Filtros para la tabla `usuario`

@@ -1,74 +1,132 @@
 <?php
 /**
- * app/Views/staff/modals/show-modal.php
- * Modal "Detalle del Empleado". Se puebla vía JS tras un GET a staff/getByIdAjax?id=X;
- * cada valor se identifica con el id  verEmpleado__<clave>.
- * Usa components/modal.php + clases de user-detail (_user-detail.scss).
+ * app/Views/empleados/modals/show-modal.php
+ * Modal "Detalle del Empleado". Se puebla vía JS tras un GET a
+ * empleados/show?id=...; el contrato con empleado.js son los atributos
+ * [data-campo] (y [data-campo-foto], [data-campo-iniciales]).
+ * Usa components/modal.php + user-detail + wizard-summary.
+ *
+ * IMPORTANTE: usa los MISMOS data-campo del archivo original.
+ * No requiere cambios en empleado.js ni en el backend.
  */
 
-// Columnas de detalle: [ etiqueta, clave del id ]. Agregar un dato = agregar una línea.
-$columnas = [
-    [
-        ['icono' => 'bi-person', 'titulo' => 'Información personal', 'campos' => [
-            ['Nombre completo',        'nombreCompleto'],
-            ['Documento de identidad', 'cedula'],
-            ['Fecha de nacimiento',    'nacimiento'],
-            ['Sexo',                   'sexo'],
-            ['Nacionalidad',           'nacionalidad'],
-        ]],
-    ],
-    [
-        ['icono' => 'bi-briefcase', 'titulo' => 'Información laboral', 'campos' => [
-            ['Cargo',            'cargoDetalle'],
-            ['Fecha de ingreso', 'fechaIngreso'],
-        ]],
-        ['icono' => 'bi-telephone', 'titulo' => 'Contacto', 'campos' => [
-            ['Teléfono principal',  'telefono'],
-            ['Correo electrónico',  'correo'],
-        ]],
-    ],
-];
+// Helper local: imprime un par label/valor dentro de un wizard-summary__grid.
+$campo = static function (string $etiqueta, string $clave): void {
+    ?>
+    <div class="wizard-summary__item">
+      <span class="wizard-summary__label"><?= htmlspecialchars($etiqueta) ?></span>
+      <span class="wizard-summary__value" data-campo="<?= htmlspecialchars($clave) ?>">—</span>
+    </div>
+    <?php
+};
 
 ob_start();
 ?>
 <div class="user-detail__header">
-  <span class="avatar avatar--xl avatar--primary" id="verEmpleado__avatar">
-    <span id="verEmpleado__iniciales">EE</span>
+  <span class="avatar avatar--xl avatar--primary">
+    <img data-campo-foto alt="" hidden>
+    <span data-campo-iniciales>EE</span>
   </span>
-  <div class="user-detail__name" id="verEmpleado__nombre">—</div>
+
+  <div class="d-flex align-items-center gap-2 mt-3">
+    <span class="user-detail__name mt-0" data-campo="nombre_completo">—</span>
+    <span class="status-badge status-badge--active" data-campo="estado">—</span>
+  </div>
+
   <div class="user-detail__meta">
-    <span class="status-badge status-badge--active" id="verEmpleado__estadoBadge">—</span>
+    <span data-campo="cargo">—</span>
     <span class="user-detail__meta-sep">•</span>
-    <span id="verEmpleado__cargo">—</span>
+    <span data-campo="cedula">—</span>
   </div>
 </div>
 
-<div class="row g-4">
-  <?php foreach ($columnas as $secciones): ?>
-    <div class="col-md-6">
-      <?php foreach ($secciones as $i => $seccion): ?>
-        <div class="detail-section__label <?= $i > 0 ? 'mt-3' : '' ?>">
-          <i class="bi <?= $seccion['icono'] ?>"></i><?= htmlspecialchars($seccion['titulo']) ?>
+<div class="row g-2">
+  <div class="col-md-6">
+    <div class="wizard-summary__section">
+      <div class="wizard-summary__section-header">
+        <span class="wizard-summary__icon"><i class="bi bi-person" aria-hidden="true"></i></span>
+        <span class="wizard-summary__section-title">Información personal</span>
+      </div>
+      <div class="wizard-summary__card">
+        <div class="wizard-summary__grid">
+          <?php
+            $campo('Documento de identidad', 'cedula');
+            $campo('Fecha de nacimiento', 'fecha_nacimiento');
+            $campo('Sexo', 'sexo');
+          ?>
         </div>
-        <?php foreach ($seccion['campos'] as [$etiqueta, $clave]): ?>
-          <div class="detail-list__item">
-            <div class="label-sigde"><?= htmlspecialchars($etiqueta) ?></div>
-            <div class="detail-list__value" id="verEmpleado__<?= $clave ?>">—</div>
-          </div>
-        <?php endforeach; ?>
-      <?php endforeach; ?>
+      </div>
     </div>
-  <?php endforeach; ?>
+  </div>
+
+  <div class="col-md-6">
+    <div class="wizard-summary__section">
+      <div class="wizard-summary__section-header">
+        <span class="wizard-summary__icon"><i class="bi bi-briefcase" aria-hidden="true"></i></span>
+        <span class="wizard-summary__section-title">Información laboral</span>
+      </div>
+      <div class="wizard-summary__card">
+        <div class="wizard-summary__grid">
+          <?php
+            $campo('Cargo', 'cargo');
+            $campo('Fecha de ingreso', 'fecha_ingreso');
+            $campo('Fecha de egreso', 'fecha_egreso');
+          ?>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
-<div class="user-detail__status-bar">
-  <div>
-    <div class="label-sigde mb-1">Estado</div>
-    <div class="user-detail__status-value" id="verEmpleado__estadoValor">—</div>
+<div class="wizard-summary__section mt-2">
+  <div class="wizard-summary__section-header">
+    <span class="wizard-summary__icon"><i class="bi bi-telephone" aria-hidden="true"></i></span>
+    <span class="wizard-summary__section-title">Información de contacto</span>
   </div>
-  <div class="text-md-end">
-    <div class="label-sigde mb-1">Formación académica</div>
-    <div class="detail-list__value" id="verEmpleado__formacion">—</div>
+  <div class="wizard-summary__card">
+    <div class="wizard-summary__grid">
+      <div class="contact-channel">
+        <span class="contact-channel__icon"><i class="bi bi-telephone" aria-hidden="true"></i></span>
+        <div class="contact-channel__body">
+          <span class="contact-channel__label">Teléfono principal</span>
+          <span class="contact-channel__value" data-campo="telefono">—</span>
+        </div>
+      </div>
+      <div class="contact-channel">
+        <span class="contact-channel__icon"><i class="bi bi-phone" aria-hidden="true"></i></span>
+        <div class="contact-channel__body">
+          <span class="contact-channel__label">Teléfono alternativo</span>
+          <span class="contact-channel__value" data-campo="telefono_alternativo">—</span>
+        </div>
+      </div>
+      <div class="contact-channel">
+        <span class="contact-channel__icon"><i class="bi bi-envelope" aria-hidden="true"></i></span>
+        <div class="contact-channel__body">
+          <span class="contact-channel__label">Correo electrónico</span>
+          <span class="contact-channel__value" data-campo="correo">—</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="wizard-summary__section mt-2">
+  <div class="wizard-summary__section-header">
+    <span class="wizard-summary__icon"><i class="bi bi-geo-alt" aria-hidden="true"></i></span>
+    <span class="wizard-summary__section-title">Dirección de habitación</span>
+  </div>
+  <div class="wizard-summary__card">
+    <div class="wizard-summary__value" data-campo="direccion_completa">—</div>
+  </div>
+</div>
+
+<div class="wizard-summary__section mt-2">
+  <div class="wizard-summary__section-header">
+    <span class="wizard-summary__icon"><i class="bi bi-mortarboard" aria-hidden="true"></i></span>
+    <span class="wizard-summary__section-title">Formación académica</span>
+  </div>
+  <div class="wizard-summary__card">
+    <div class="wizard-summary__value" data-campo="formacion">—</div>
   </div>
 </div>
 <?php

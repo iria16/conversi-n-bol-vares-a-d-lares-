@@ -2,6 +2,7 @@
 @import "variables";
 @import "../../node_modules/bootstrap/scss/bootstrap";
 @import "custom";
+@import "base/mixins";
 @import "base/typography";
 @import "components/input-icon-group";
 @import "components/auth";
@@ -18,7 +19,5 @@
 @import "components/modal";
 @import "components/data-panel";
 @import "components/content-card";
-@import "components/wizard-summary";
 @import "components/tables";
-@import "components/student-record";
 @import "components/form-wizard";

@@ -16,21 +16,25 @@ ob_start();
   <input type="hidden" name="tipo" value="<?= htmlspecialchars($catalogoActivo) ?>">
   <input type="hidden" name="id" id="editarElementoId">
 
-  <div class="mb-3">
-    <label for="editarElementoNombre" class="form-label">
-      Nombre <span class="text-danger">*</span>
-    </label>
-    <input
-      type="text"
-      id="editarElementoNombre"
-      name="nombre"
-      class="form-control"
-      required
-      maxlength="50"
-      autocomplete="off"
-    >
-    <div class="invalid-feedback">El nombre es obligatorio (máximo 100 caracteres).</div>
-  </div>
+  <section class="wizard-summary__section">
+    <div class="wizard-summary__card">
+      <div class="mb-3">
+        <label for="editarElementoNombre" class="form-label">
+          Nombre <span class="text-danger">*</span>
+        </label>
+        <input
+          type="text"
+          id="editarElementoNombre"
+          name="nombre"
+          class="form-control"
+          required
+          maxlength="50"
+          autocomplete="off"
+        >
+        <div class="invalid-feedback">El nombre es obligatorio (máximo 100 caracteres).</div>
+      </div>
+    </div>
+  </section>
 </form>
 <?php
 $modalBody = ob_get_clean();

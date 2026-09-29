@@ -1,0 +1,12 @@
+// ==========================================================================
+// SIGDE - Mixins compartidos
+// Se importa en app.scss después de "custom". Reutilizados por los
+// componentes de tarjeta/panel para no repetir bg + radio + sombra.
+// ==========================================================================
+
+// Superficie base de tarjeta/panel blanco.
+@mixin surface-card {
+  background: $surface;
+  border-radius: $border-radius-xl;
+  box-shadow: $box-shadow-sm;
+}

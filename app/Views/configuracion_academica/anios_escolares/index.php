@@ -32,7 +32,7 @@ ob_start();
   $pageHeaderActions = ob_get_clean();
   $pageHeading       = 'Gestión de Años Escolares';
   $pageSubheading    = $pageDescription;
-  include __DIR__ . '/../components/page-header.php';
+  include __DIR__ . '/../../components/page-header.php';
 ?>
 
 <!-- ---------- Stat cards ---------- -->
@@ -45,7 +45,7 @@ ob_start();
       $statTone      = 'primary';
       $statTrend     = '+' . (int) $stats['total'] . ' registrados';
       $statTrendType = 'up';
-      include __DIR__ . '/../components/stat-card.php';
+      include __DIR__ . '/../../components/stat-card.php';
     ?>
   </div>
   <div class="col-sm-6 col-lg-4">
@@ -56,7 +56,7 @@ ob_start();
       $statTone      = 'success';
       $statTrend     = 'Activo';
       $statTrendType = 'neutral';
-      include __DIR__ . '/../components/stat-card.php';
+      include __DIR__ . '/../../components/stat-card.php';
     ?>
   </div>
   <div class="col-sm-6 col-lg-4">
@@ -68,7 +68,7 @@ ob_start();
       $statVariant   = 'alert';
       $statTrend     = 'Revisar';
       $statTrendType = 'down';
-      include __DIR__ . '/../components/stat-card.php';
+      include __DIR__ . '/../../components/stat-card.php';
     ?>
   </div>
 </div>
@@ -131,7 +131,7 @@ ob_start();
         <?php
           $badgeLabel  = $activo ? 'Activo' : 'Inactivo';
           $badgeStatus = $activo ? 'active' : 'inactive';
-          include __DIR__ . '/../components/status-badge.php';
+          include __DIR__ . '/../../components/status-badge.php';
         ?>
       </td>
       <td class="text-center">
@@ -172,7 +172,7 @@ ob_start();
       'total_paginas' => $paginacion['total_paginas'],
   ];
 
-  include __DIR__ . '/../components/data-panel.php';
+  include __DIR__ . '/../../components/data-panel.php';
 ?>
 
 <?php
@@ -182,34 +182,48 @@ $modalSubtitle = 'Registre un nuevo período académico institucional.';
 ob_start();
 ?>
 <form id="formAnioEscolar" novalidate>
-  <div class="form-section__label">Información del período</div>
-  <div class="mb-3">
-    <label for="anioNombre" class="label-sigde">Nombre del período</label>
-    <input type="text" id="anioNombre" name="nombre" class="form-control" placeholder="Ej. 2024-2025" maxlength="20" required>
-    <div class="invalid-feedback">Indique el nombre del período.</div>
-  </div>
-  <div class="row g-3">
-    <div class="col-md-6">
-      <label for="anioInicio" class="label-sigde">Fecha de inicio</label>
-      <input type="date" id="anioInicio" name="fecha_inicio" class="form-control" required>
-      <div class="invalid-feedback">Indique la fecha de inicio.</div>
+  <section class="wizard-summary__section">
+    <div class="wizard-summary__section-header">
+      <span class="wizard-summary__icon"><i class="bi bi-calendar-check" aria-hidden="true"></i></span>
+      <span class="wizard-summary__section-title">Información del período</span>
     </div>
-    <div class="col-md-6">
-      <label for="anioCierre" class="label-sigde">Fecha de cierre</label>
-      <input type="date" id="anioCierre" name="fecha_cierre" class="form-control" required>
-      <div class="invalid-feedback">Indique la fecha de cierre.</div>
+    <div class="wizard-summary__card">
+      <div class="mb-3">
+        <label for="anioNombre" class="label-sigde">Nombre del período</label>
+        <input type="text" id="anioNombre" name="nombre" class="form-control" placeholder="Ej. 2024-2025" maxlength="20" required>
+        <div class="invalid-feedback">Indique el nombre del período.</div>
+      </div>
+      <div class="row g-2">
+        <div class="col-md-6">
+          <label for="anioInicio" class="label-sigde">Fecha de inicio</label>
+          <input type="date" id="anioInicio" name="fecha_inicio" class="form-control" required>
+          <div class="invalid-feedback">Indique la fecha de inicio.</div>
+        </div>
+        <div class="col-md-6">
+          <label for="anioCierre" class="label-sigde">Fecha de cierre</label>
+          <input type="date" id="anioCierre" name="fecha_cierre" class="form-control" required>
+          <div class="invalid-feedback">Indique la fecha de cierre.</div>
+        </div>
+      </div>
     </div>
-  </div>
-  <div class="form-section__label mt-4">Estado inicial</div>
-  <div class="form-check">
-    <input class="form-check-input" type="checkbox" name="estado" value="ACTIVO" id="anioActivo">
-    <label class="form-check-label" for="anioActivo">Establecer como período activo</label>
-  </div>
+  </section>
+  <section class="wizard-summary__section mt-2">
+    <div class="wizard-summary__section-header">
+      <span class="wizard-summary__icon"><i class="bi bi-shield-check" aria-hidden="true"></i></span>
+      <span class="wizard-summary__section-title">Estado inicial</span>
+    </div>
+    <div class="wizard-summary__card">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="estado" value="ACTIVO" id="anioActivo">
+        <label class="form-check-label" for="anioActivo">Establecer como período activo</label>
+      </div>
+    </div>
+  </section>
 </form>
 <?php
 $modalBody = ob_get_clean();
 $modalFooter = '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" form="formAnioEscolar" class="btn btn-primary"><i class="bi bi-check-lg"></i> Guardar período</button>';
-include __DIR__ . '/../components/modal.php';
+include __DIR__ . '/../../components/modal.php';
 
 $modalId = 'editarAnioModal';
 $modalTitle = 'Editar Año Escolar';
@@ -236,7 +250,7 @@ ob_start();
 <?php
 $modalBody = ob_get_clean();
 $modalFooter = '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" form="formEditarAnio" class="btn btn-primary">Guardar cambios</button>';
-include __DIR__ . '/../components/modal.php';
+include __DIR__ . '/../../components/modal.php';
 
 $pageContent = ob_get_clean();
-require __DIR__ . '/../layouts/app.php';
+require __DIR__ . '/../../layouts/app.php';

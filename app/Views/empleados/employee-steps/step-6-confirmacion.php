@@ -1,7 +1,7 @@
 <?php
 /**
  * Paso 6 - Confirmación.
- * staff.js rellena cada [data-resumen="clave"] al entrar al paso y el botón
+ * empleado.js rellena cada [data-resumen="clave"] al entrar al paso y el botón
  * [data-editar-paso="n"] regresa al paso n. Los títulos se pintan en #resumenTitulos.
  *
  * $filas = filas del resumen; cada fila agrupa 1 o 2 secciones (la fila se
@@ -19,12 +19,16 @@ $filas = [
     ],
     [
         ['paso' => 2, 'icono' => 'bi-telephone', 'titulo' => 'Información de Contacto', 'campos' => [
-            ['Teléfono principal', 'telefono_principal'],
-            ['Correo electrónico', 'correo'],
+            ['Teléfono principal',   'telefono_principal'],
+            ['Teléfono alternativo', 'telefono_alternativo'],
+            ['Correo electrónico',   'correo'],
         ]],
         ['paso' => 3, 'icono' => 'bi-geo-alt', 'titulo' => 'Dirección de Habitación', 'campos' => [
-            ['Parroquia', 'parroquia'],
-            ['Dirección', 'direccion'],
+            ['Estado',      'estado'],
+            ['Municipio',   'municipio'],
+            ['Parroquia',   'parroquia'],
+            ['Dirección',   'direccion'],
+            ['Punto de ref.', 'punto_referencia'],
         ]],
     ],
     [
@@ -36,8 +40,24 @@ $filas = [
     ],
 ];
 ?>
-<div class="form-section__label">Confirmar Registro</div>
-<p class="text-support mb-4">Revisa que todo esté correcto antes de finalizar.</p>
+<div class="wizard-summary__section-header mb-2">
+  <span class="wizard-summary__icon"><i class="bi bi-clipboard-check" aria-hidden="true"></i></span>
+  <span class="wizard-summary__section-title">Confirmar registro</span>
+</div>
+<p class="text-support mb-3">Revisa que todo esté correcto antes de finalizar.</p>
+
+<div class="wizard-summary__identity">
+  <span class="avatar avatar--xl avatar--primary" id="resumenFoto" data-resumen="foto">
+    <i class="bi bi-person" aria-hidden="true"></i>
+  </span>
+  <div class="wizard-summary__identity-info">
+    <div class="wizard-summary__identity-name" data-resumen="nombre_completo">—</div>
+    <div class="wizard-summary__identity-doc" data-resumen="documento">—</div>
+  </div>
+  <button type="button" class="wizard-summary__edit-btn" data-editar-paso="1">
+    <i class="bi bi-pencil"></i> Editar
+  </button>
+</div>
 
 <div class="wizard-summary">
   <?php foreach ($filas as $fila): ?>

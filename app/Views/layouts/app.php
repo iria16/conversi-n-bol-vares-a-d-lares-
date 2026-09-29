@@ -51,6 +51,7 @@ $tieneNotificaciones = in_array($rolSesion, ['admin', 'secretaria', 'directivo']
       <?php include __DIR__ . '/../partials/app-header.php'; ?>
 
       <main class="app-shell__content" id="contenido-principal">
+        <?php include __DIR__ . '/../partials/alert-flash.php'; ?>
         <?php echo $pageContent; ?>
       </main>
 

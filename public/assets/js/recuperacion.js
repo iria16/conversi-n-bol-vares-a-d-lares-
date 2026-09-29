@@ -16,33 +16,14 @@ document.addEventListener('DOMContentLoaded', function () {
   initRechazarSolicitud();
   initVerDetalleModal();
   initRestablecerClaveForm();
-  initCopyToClipboardButtons();
+  SIGDEUI.copiarAlPortapapeles();
 });
 
 var baseUrl = window.BASE_URL || '';
 var rutaControlador = 'recuperacionAcceso';
 
-/**
- * POST application/x-www-form-urlencoded. `data` es un objeto plano
- * { campo: valor }.
- */
-function postForm(url, data) {
-  var params = new URLSearchParams(data || {});
-
-  return fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'X-Requested-With': 'XMLHttpRequest'
-    },
-    body: params
-  }).then(function (res) { return res.json(); });
-}
-
-function getJson(url) {
-  return fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-    .then(function (res) { return res.json(); });
-}
+/* Los helpers de red (postForm/getJson) viven en SIGDEUI (sigde-ui.js):
+   los usaban este módulo y academic-years.js con el mismo cuerpo. */
 
 /**
  * Refresca la tabla de solicitudes conservando los filtros/página
@@ -82,31 +63,22 @@ async function aprobarSolicitud(btn) {
   var nombre = btn.dataset.usuarioNombre || '';
 
   var confirmacion = false;
-  if (window.Swal) {
-    var result = await Swal.fire({
-      title: '¿Aprobar solicitud?',
-      text: '¿Aprobar la solicitud de ' + nombre + '? Se generará una contraseña provisional.',
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'Sí, aprobar',
-      cancelButtonText: 'Cancelar',
-      reverseButtons: true
-    });
-    confirmacion = result.isConfirmed;
-  } else {
-    confirmacion = confirm('¿Aprobar la solicitud de ' + nombre + '? Se generará una contraseña provisional.');
-  }
+  confirmacion = await SIGDEUI.confirmar({
+    titulo: '¿Aprobar solicitud?',
+    texto: '¿Aprobar la solicitud de ' + nombre + '? Se generará una contraseña provisional.',
+    confirmar: 'Sí, aprobar'
+  });
   if (!confirmacion) return;
 
   btn.disabled = true;
   try {
-    var data = await postForm(baseUrl + rutaControlador + '/updateEstado', {
+    var data = await SIGDEUI.postForm(baseUrl + rutaControlador + '/updateEstado', {
       id: id,
       accion: 'aprobar'
     });
 
     if (!data.ok) {
-      mostrarError(data.mensaje || 'No se pudo aprobar la solicitud.');
+      SIGDEUI.mostrarError(data.mensaje || 'No se pudo aprobar la solicitud.');
       return;
     }
 
@@ -114,15 +86,15 @@ async function aprobarSolicitud(btn) {
 
     var modalCredencialesEl = document.getElementById('modalCredencialesUsuario');
     if (modalCredencialesEl) {
-      modalCredencialesEl.addEventListener('hidden.bs.modal', function () {
+      SIGDEUI.alCerrarModal(modalCredencialesEl, function refrescarTrasCredenciales() {
         refrescarListaSolicitudes();
-      }, { once: true });
+      });
     } else {
       refrescarListaSolicitudes();
     }
   } catch (err) {
     console.error('Error al aprobar la solicitud:', err);
-    mostrarError('Error de conexión al aprobar la solicitud.');
+    SIGDEUI.mostrarError('Error de conexión al aprobar la solicitud.');
   } finally {
     btn.disabled = false;
   }
@@ -142,48 +114,30 @@ function initRechazarSolicitud() {
 async function rechazarSolicitud(btn) {
   var id = btn.dataset.solicitudId;
 
-  var confirmacion = false;
-  if (window.Swal) {
-    var result = await Swal.fire({
-      title: '¿Rechazar solicitud?',
-      text: '¿Está seguro que desea rechazar esta solicitud de recuperación de acceso?',
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'Sí, rechazar',
-      cancelButtonText: 'Cancelar',
-      reverseButtons: true
-    });
-    confirmacion = result.isConfirmed;
-  } else {
-    confirmacion = confirm('¿Rechazar esta solicitud de recuperación de acceso?');
-  }
+  var confirmacion = await SIGDEUI.confirmar({
+    titulo: '¿Rechazar solicitud?',
+    texto: '¿Está seguro que desea rechazar esta solicitud de recuperación de acceso?',
+    confirmar: 'Sí, rechazar'
+  });
   if (!confirmacion) return;
 
   btn.disabled = true;
   try {
-    var data = await postForm(baseUrl + rutaControlador + '/updateEstado', {
+    var data = await SIGDEUI.postForm(baseUrl + rutaControlador + '/updateEstado', {
       id: id,
       accion: 'rechazar'
     });
 
     if (!data.ok) {
-      mostrarError(data.mensaje || 'No se pudo rechazar la solicitud.');
+      SIGDEUI.mostrarError(data.mensaje || 'No se pudo rechazar la solicitud.');
       return;
     }
 
-    if (window.Swal) {
-      Swal.fire({
-        icon: 'success',
-        title: '¡Listo!',
-        text: data.mensaje || 'Solicitud rechazada.',
-        timer: 1500,
-        showConfirmButton: false
-      });
-    }
+    SIGDEUI.exito(data.mensaje || 'Solicitud rechazada.', '¡Listo!');
     setTimeout(function () { refrescarListaSolicitudes(); }, 600);
   } catch (err) {
     console.error('Error al rechazar la solicitud:', err);
-    mostrarError('Error de conexión al rechazar la solicitud.');
+    SIGDEUI.mostrarError('Error de conexión al rechazar la solicitud.');
   } finally {
     btn.disabled = false;
   }
@@ -208,17 +162,28 @@ function cargarYMostrarDetalle(id, modalDetalleEl) {
   var elNombre = modalDetalleEl.querySelector('#detalleNombre');
   if (elNombre) elNombre.textContent = 'Cargando...';
 
-  getJson(baseUrl + rutaControlador + '/getDetalle?id=' + encodeURIComponent(id))
-    .then(function (data) {
-      if (!data.ok) {
-        mostrarError(data.mensaje || 'No se pudo cargar el detalle.');
-        return;
-      }
-      pintarDetalleSolicitud(modalDetalleEl, data.data);
-    })
+    SIGDEUI.getJson(baseUrl + rutaControlador + '/getDetalle?id=' + encodeURIComponent(id))
+      .then(function (data) {
+        if (!data.ok) {
+          SIGDEUI.mostrarError(data.mensaje || 'No se pudo cargar el detalle.');
+          return;
+        }
+        /* Doble .data, a propósito, y es lo más fácil de romper de este archivo.
+           SIGDEUI.getJson() resuelve {ok, status, data} donde ese `data` es el
+           sobre que devolvió el servidor, {ok, mensaje, data:{...}}. La carga
+           útil está un nivel más adentro: data.data.data. Por eso acá van dos.
+
+           Antes se pasaba solo data.data, o sea el sobre, y pintarDetalleDetalle
+           leía d.nombre, d.estado, d.fecha... sobre un objeto que no tiene nada
+           de eso. No daba error: los `set()` caen a '—' y el estado se iba a
+           'pendiente', así que el modal abría LIMPIO y en silencio, con el
+           nombre, la fecha y el administrador en guiones. Parecía un modal vacío,
+           y en realidad era un modal con el sobre equivocado. */
+        pintarDetalleSolicitud(modalDetalleEl, data.data && data.data.data);
+      })
     .catch(function (err) {
       console.error('Error al cargar detalle:', err);
-      mostrarError('Error de conexión al cargar el detalle.');
+      SIGDEUI.mostrarError('Error de conexión al cargar el detalle.');
     });
 }
 
@@ -238,11 +203,18 @@ function pintarDetalleSolicitud(modalDetalleEl, d) {
     if (el) el.textContent = val || '—';
   };
 
-  set('detalleNombre', d.nombre);
-  set('detalleUsuario', d.usuario ? d.usuario : '—');
-  set('detalleFecha', ((d.fecha || '') + ' ' + (d.hora || '')).trim() || '—');
-  set('detalleFechaAtencion', d.fecha_atencion);
-  set('detalleAdmin', d.admin_atendio);
+    set('detalleNombre', d.nombre);
+    set('detalleUsuario', d.usuario ? d.usuario : '—');
+    set('detalleFecha', ((d.fecha || '') + ' ' + (d.hora || '')).trim() || '—');
+    set('detalleCargo', d.cargo);
+    // El documento se arma aquí y no en el modelo porque el modelo manda el tipo
+    // y el número por separado, tal como se guardan. Lo que la persona ve, en
+    // cambio, es el documento junto: "V-22509285", como se cita en un expediente.
+    set('detalleDocumento', d.tipo_documento && d.numero_documento
+      ? d.tipo_documento + '-' + d.numero_documento
+      : '—');
+    set('detalleFechaAtencion', d.fecha_atencion);
+    set('detalleAdmin', d.admin_atendio);
 
   var elEstado = modalDetalleEl.querySelector('#detalleEstado');
   if (elEstado) {
@@ -260,15 +232,47 @@ function pintarDetalleSolicitud(modalDetalleEl, d) {
   var fechaAtencion = d.fecha_atencion || '—';
   var admin = d.admin_atendio || '—';
 
-  if (elTitulo && elTexto) {
-    if (d.origen === 'admin') {
-      elTitulo.textContent = 'Restablecimiento directo';
-      elTexto.innerHTML = 'Restablecida el <strong>' + escapeHtml(fechaAtencion) + '</strong> por <strong>' + escapeHtml(admin) + '</strong>, sin solicitud previa del usuario.';
-    } else {
-      elTitulo.textContent = 'Atención de la solicitud';
-      elTexto.innerHTML = 'Atendida el <strong>' + escapeHtml(fechaAtencion) + '</strong> por <strong>' + escapeHtml(admin) + '</strong>.';
+    if (elTitulo && elTexto) {
+      /* Estos dos ids (el bloque y su ícono) existían en el HTML desde antes y
+         ningún script los tocaba: eran un cableado a medio hacer de un diseño
+         anterior. Ahora sirven para lo que parecían haber nacido para, que es
+         distinguir el estado a simple vista y no solo con el texto.
+
+         Sin atender es una advertencia: hay algo esperando y el ícono de
+         información ("aquí no hay nada que saber") engaña. Con el reloj de
+         arena se lee de un vistazo que la solicitud está en cola. */
+      var elBloque = modalDetalleEl.querySelector('#detalleAtencionBloque');
+      var elIcono  = modalDetalleEl.querySelector('#detalleAtencionIcono');
+      var pendiente = !d.fecha_atencion || !d.admin_atendio;
+
+      if (elBloque) {
+        elBloque.classList.toggle('info-alert--warning', pendiente);
+      }
+      if (elIcono) {
+        elIcono.classList.toggle('bi-hourglass-split', pendiente);
+        elIcono.classList.toggle('bi-info-circle', !pendiente);
+      }
+
+      /* El texto se arma según los tres casos que existen de verdad: atendida
+         por alguien, restablecida de una, o sin atender todavía.
+
+         Antes ponía "Atendida el <fecha> por <nombre>" siempre, y para una
+         solicitud pendiente salía "Atendida el — por —": afirmaba algo que
+         no había pasado y con dos huecos. Hoy no hay solicitudes pendientes en
+         la base, pero el código las admite y el día que haya una, el modal iba
+         a mentir con seguridad en vez de a lo sumo. */
+      if (pendiente) {
+        elTitulo.textContent = 'Sin atender todavía';
+        elTexto.innerHTML = 'Esta solicitud está pendiente de que un administrador la revise. '
+          + 'Todavía no hay fecha de atención ni responsable.';
+      } else if (d.origen === 'admin') {
+        elTitulo.textContent = 'Restablecimiento directo';
+        elTexto.innerHTML = 'Restablecida el <strong>' + SIGDEUI.escapeHtml(fechaAtencion) + '</strong> por <strong>' + SIGDEUI.escapeHtml(admin) + '</strong>, sin solicitud previa del usuario.';
+      } else {
+        elTitulo.textContent = 'Atención de la solicitud';
+        elTexto.innerHTML = 'Atendida el <strong>' + SIGDEUI.escapeHtml(fechaAtencion) + '</strong> por <strong>' + SIGDEUI.escapeHtml(admin) + '</strong>.';
+      }
     }
-  }
 }
 
 /* ── Restablecer contraseña manualmente ─────────────────────────── */
@@ -296,18 +300,18 @@ function initRestablecerClaveForm() {
     }
 
     try {
-      var data = await postForm(baseUrl + rutaControlador + '/resetPassword', {
+      var data = await SIGDEUI.postForm(baseUrl + rutaControlador + '/resetPassword', {
         usuario_id: usuarioId
       });
 
       if (!data.ok) {
-        mostrarError(data.mensaje || 'No se pudo restablecer la contraseña.');
+        SIGDEUI.mostrarError(data.mensaje || 'No se pudo restablecer la contraseña.');
         return;
       }
 
       var restablecerModalEl = document.getElementById('restablecerClaveModal');
       if (restablecerModalEl) {
-        bootstrap.Modal.getOrCreateInstance(restablecerModalEl).hide();
+        SIGDEUI.ocultarModal(restablecerModalEl);
       }
 
       mostrarCredenciales(data.data);
@@ -317,14 +321,14 @@ function initRestablecerClaveForm() {
         modalCredencialesEl.addEventListener('hidden.bs.modal', function () {
           formRestablecerClave.reset();
           refrescarListaSolicitudes();
-        }, { once: true });
+        });
       } else {
         formRestablecerClave.reset();
         refrescarListaSolicitudes();
       }
     } catch (err) {
       console.error('Error al restablecer la contraseña:', err);
-      mostrarError('Error de conexión al restablecer la contraseña.');
+      SIGDEUI.mostrarError('Error de conexión al restablecer la contraseña.');
     } finally {
       if (btnRestablecerClave) {
         btnRestablecerClave.disabled = false;
@@ -346,46 +350,6 @@ function mostrarCredenciales(data) {
   if (elClave) elClave.textContent = clave;
 
   var modalEl = document.getElementById('modalCredencialesUsuario');
-  if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  if (modalEl) SIGDEUI.mostrarModal(modalEl);
 }
 
-/* ── Copiar al portapapeles (usuario / contraseña provisional) ──── */
-
-function initCopyToClipboardButtons() {
-  document.addEventListener('click', function (e) {
-    var btn = e.target.closest('[data-copy-target]');
-    if (!btn) return;
-
-    var targetId = btn.dataset.copyTarget;
-    var targetEl = targetId ? document.getElementById(targetId) : null;
-    if (!targetEl || !navigator.clipboard) return;
-
-    var texto = targetEl.textContent || '';
-
-    navigator.clipboard.writeText(texto).then(function () {
-      var icono = btn.querySelector('i');
-      if (!icono) return;
-      var claseOriginal = icono.className;
-      icono.className = 'bi bi-check-lg';
-      setTimeout(function () { icono.className = claseOriginal; }, 1500);
-    }).catch(function () {
-      mostrarError('No se pudo copiar al portapapeles.');
-    });
-  });
-}
-
-/* ── Utilidades ─────────────────────────────────────────────────── */
-
-function escapeHtml(texto) {
-  var div = document.createElement('div');
-  div.textContent = texto == null ? '' : String(texto);
-  return div.innerHTML;
-}
-
-function mostrarError(mensaje, titulo) {
-  if (window.Swal) {
-    Swal.fire({ icon: 'error', title: titulo || 'Error', text: mensaje });
-  } else {
-    alert((titulo ? titulo + '\n' : '') + mensaje);
-  }
-}

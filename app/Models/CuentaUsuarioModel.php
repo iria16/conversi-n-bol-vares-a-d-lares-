@@ -8,17 +8,26 @@ use App\Interfaces\Toggleable;
 use App\Interfaces\Updatable;
 use App\Interfaces\Listable;
 use App\Traits\AvatarTrait;
+use App\Traits\PasswordTrait;
 use PDO;
 use PDOException;
 use Throwable;
 
+/**
+ * Cuentas de usuario (tabla usuario) unidas con persona, rol y, si existe, empleado/cargo.
+ * El alta genera una clave provisional; no implementa Deletable, las cuentas solo se activan o desactivan.
+ */
 class CuentaUsuarioModel extends BaseModel implements Updatable, Toggleable, Listable
 {
     use AvatarTrait;
+    use PasswordTrait;
 
     protected string $table = 'usuario';
     protected string $primaryKey = 'id_usuario';
 
+    /**
+     * Lista usuarios con filtros y paginación, del más reciente al más antiguo, ya mapeados para la vista.
+     */
     public function getAll(array $filters = [], int $page = 1, int $perPage = 10): array
     {
         [$where, $params] = $this->buildJoinFilters($filters);
@@ -106,6 +115,9 @@ class CuentaUsuarioModel extends BaseModel implements Updatable, Toggleable, Lis
         ];
     }
 
+    /**
+     * Cuenta los usuarios que cumplen los filtros; mantiene los mismos joins que getAll() para que los filtros apliquen igual.
+     */
     public function countAll(array $filters = []): int
     {
         [$where, $params] = $this->buildJoinFilters($filters);
@@ -122,6 +134,9 @@ class CuentaUsuarioModel extends BaseModel implements Updatable, Toggleable, Lis
         return (int) $stmt->fetchColumn();
     }
 
+    /**
+     * Arma el WHERE y los parámetros a partir de los filtros id_rol, estado y q (búsqueda por nombre, apellido o usuario).
+     */
     private function buildJoinFilters(array $filters): array
     {
         $where = [];
@@ -148,6 +163,9 @@ class CuentaUsuarioModel extends BaseModel implements Updatable, Toggleable, Lis
         return [$where, $params];
     }
 
+    /**
+     * Contadores para las tarjetas de resumen: total, activas, inactivas y sus porcentajes.
+     */
     public function getStats(): array
     {
         $total   = (int) $this->pdo->query("SELECT COUNT(*) FROM usuario")->fetchColumn();
@@ -164,12 +182,19 @@ class CuentaUsuarioModel extends BaseModel implements Updatable, Toggleable, Lis
         ];
     }
 
+    /**
+     * Roles disponibles (id + nombre) para filtros y formularios.
+     */
     public function getRoles(): array
     {
         $stmt = $this->pdo->query("SELECT id_rol AS id, nombre FROM rol ORDER BY nombre");
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Empleados activos, sin fecha de egreso y sin cuenta de usuario, para elegir al crear una cuenta.
+     * El id devuelto es el de la persona.
+     */
     public function getEmpleadosDisponibles(): array
     {
         $sql = "SELECT
@@ -188,6 +213,10 @@ class CuentaUsuarioModel extends BaseModel implements Updatable, Toggleable, Lis
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Indica si el nombre de usuario ya existe (sin distinguir mayúsculas).
+     * Con $excludeId se omite la cuenta que se está editando.
+     */
     public function existeNombreUsuario(string $nombreUsuario, ?int $excludeId = null): bool
     {
         $sql = "SELECT COUNT(*) FROM usuario WHERE LOWER(nombre_usuario) = LOWER(:nombre)";
@@ -201,6 +230,9 @@ class CuentaUsuarioModel extends BaseModel implements Updatable, Toggleable, Lis
         return ((int) $stmt->fetchColumn()) > 0;
     }
 
+    /**
+     * Indica si la persona ya tiene una cuenta de usuario asignada.
+     */
     public function personaTieneUsuario(int $personaId): bool
     {
         $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM usuario WHERE id_persona = :persona_id");
@@ -208,6 +240,10 @@ class CuentaUsuarioModel extends BaseModel implements Updatable, Toggleable, Lis
         return ((int) $stmt->fetchColumn()) > 0;
     }
 
+    /**
+     * Crea la cuenta con una clave provisional y devuelve ['ok', 'mensaje', ...]; en éxito incluye la clave en texto plano.
+     * Valida usuario duplicado y persona con cuenta; el error 23000 cubre la carrera con el UNIQUE.
+     */
     public function crearUsuario(int $personaId, int $rolId, string $nombreUsuario): array
     {
         if ($this->existeNombreUsuario($nombreUsuario)) {
@@ -218,7 +254,7 @@ class CuentaUsuarioModel extends BaseModel implements Updatable, Toggleable, Lis
             return ['ok' => false, 'mensaje' => 'La persona seleccionada ya posee una cuenta de usuario asignada.'];
         }
 
-        $passwordProvisional = $this->generarPasswordProvisional();
+        $passwordProvisional = $this->generarClaveProvisional();
         $passwordHash = password_hash($passwordProvisional, PASSWORD_DEFAULT);
 
         try {
@@ -255,6 +291,10 @@ class CuentaUsuarioModel extends BaseModel implements Updatable, Toggleable, Lis
         }
     }
 
+    /**
+     * Cambia el nombre de usuario y el rol de la cuenta; no toca la clave ni el estado.
+     * Ante un error lo registra en el log y devuelve false.
+     */
     public function update(int $id, array $data): bool
     {
         $sql = "UPDATE usuario
@@ -272,29 +312,28 @@ class CuentaUsuarioModel extends BaseModel implements Updatable, Toggleable, Lis
         }
     }
 
-    private function generarPasswordProvisional(int $length = 10): string
-    {
-        $caracteres = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-        $password = '';
-        $max = strlen($caracteres) - 1;
-        for ($i = 0; $i < $length; $i++) {
-            $password .= $caracteres[random_int(0, $max)];
-        }
-        return $password;
-    }
-
+    /**
+     * Devuelve un usuario en formato de listado (mapRowToVista), o null si no existe.
+     */
     public function getDetalleById(int $id): ?array
     {
         $row = $this->fetchUsuarioRow($id);
         return $row ? $this->mapRowToVista($row) : null;
     }
 
+    /**
+     * Devuelve un usuario en formato completo para el modal de detalle (mapRowToDetalle), o null si no existe.
+     */
     public function getDetalleCompletoById(int $id): ?array
     {
         $row = $this->fetchUsuarioRow($id, incluirDetalleExtendido: true);
         return $row ? $this->mapRowToDetalle($row) : null;
     }
 
+    /**
+     * Trae la fila del usuario por id; con $incluirDetalleExtendido añade documento, nombres completos,
+     * fecha de creación y último LOGIN según la bitácora.
+     */
     private function fetchUsuarioRow(int $id, bool $incluirDetalleExtendido = false): ?array
     {
         $camposExtra = $incluirDetalleExtendido
@@ -326,6 +365,10 @@ class CuentaUsuarioModel extends BaseModel implements Updatable, Toggleable, Lis
         return $row ?: null;
     }
 
+    /**
+     * Alterna la cuenta entre ACTIVO e INACTIVO.
+     * Limpia $field a caracteres seguros porque el nombre de columna va directo al SQL.
+     */
     public function toggleStatus(int $id, string $field = 'estado'): bool
     {
         $field = preg_replace('/[^a-zA-Z0-9_]/', '', $field);

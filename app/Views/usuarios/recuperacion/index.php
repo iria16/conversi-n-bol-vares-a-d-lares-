@@ -260,7 +260,9 @@ $pageContent = ob_get_clean();
 // fuera de .app-shell, para que no hereden overflow ni apilamiento del cascarón.
 ob_start();
 include __DIR__ . '/modals/reset-password-modal.php';
-include __DIR__ . '/modals/credentials-modal.php';
+$credModalTitulo = '¡Contraseña restablecida con éxito!';
+$credModalTexto  = 'Se generó una nueva clave provisional para <strong id="credUsuarioNombre" aria-live="polite"></strong>. Copia la contraseña a continuación.';
+include __DIR__ . '/../../components/credentials-modal.php';
 include __DIR__ . '/modals/detalle-modal.php';
 $pageModals = ob_get_clean();
 

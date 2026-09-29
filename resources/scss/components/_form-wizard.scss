@@ -1,8 +1,8 @@
 // ==========================================================================
 // SIGDE - Componente: Form Wizard
 // Stepper + piezas del modal multi-paso "Registrar Nuevo Empleado".
-// Usado por: app/Views/staff/modals/employee-modal.php y app/Views/staff/employee-steps/*
-// Se apoya en .app-modal (_modal.scss), .form-section__label y .info-alert
+// Usado por: app/Views/empleados/modals/employee-modal.php y app/Views/empleados/employee-steps/*
+// Se apoya en .app-modal (_modal.scss), .wizard-summary__section-header y .info-alert
 // ya existentes: aquí solo va lo que no tiene equivalente en el sistema.
 // ==========================================================================
 
@@ -13,7 +13,7 @@
   justify-content: space-between;
   padding: 1.25rem 1.5rem 1rem;
   background: rgba($light, 0.6);
-  border-bottom: 1px solid rgba($primary, 0.06);
+  border-bottom: 1px solid $primary-tint;
 }
 
 .wizard-steps__step {
@@ -31,7 +31,7 @@
     left: 55%;
     width: 90%;
     height: 2px;
-    background: rgba($primary, 0.1);
+    background: $tint-active;
     z-index: 0;
   }
 
@@ -49,7 +49,7 @@
   justify-content: center;
   font-size: 0.78rem;
   font-weight: 700;
-  background: rgba($primary, 0.08);
+  background: $tint-hover;
   color: $secondary;
   position: relative;
   z-index: 1;
@@ -118,8 +118,8 @@
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background: #fff;
-  border: 1px solid rgba($primary, 0.1);
+  background: $surface;
+  border: 1px solid $tint-active;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -174,17 +174,27 @@
   align-items: center;
   gap: 0.5rem;
   padding: 1.1rem;
-  border: 1.5px solid rgba($primary, 0.1);
+  border: 1.5px solid $tint-active;
   border-radius: $border-radius-lg;
-  background: #fff;
+  background: $surface;
   cursor: pointer;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  transition: border-color 0.15s ease, background-color 0.15s ease,
+    box-shadow 0.15s ease;
 
   input[type='radio'] {
     position: absolute;
     top: 0.75rem;
     right: 0.75rem;
     margin: 0;
+    outline: none;
+  }
+
+  input[type='radio']:focus {
+    outline: 0;
+  }
+
+  &:has(input:focus-visible) {
+    box-shadow: 0 0 0 0.2rem rgba($primary, 0.25);
   }
 
   i {
@@ -225,7 +235,7 @@
     text-transform: uppercase;
     letter-spacing: 0.06em;
     padding: 0.6rem 0.5rem;
-    border-bottom: 1px solid rgba($primary, 0.08);
+    border-bottom: 1px solid $tint-hover;
   }
 
   tbody td {
@@ -240,6 +250,40 @@
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+}
+
+// Cabecera de identidad del resumen: avatar (reusa components/avatar.php
+// vía las clases .avatar de app.css) + nombre + documento + editar.
+.wizard-summary__identity {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid $border-color-soft;
+  border-radius: 0.45rem;
+  background: $surface-soft;
+
+  .wizard-summary__identity-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .wizard-summary__identity-name {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: $dark;
+    overflow-wrap: break-word;
+  }
+
+  .wizard-summary__identity-doc {
+    font-size: 0.8rem;
+    color: $secondary;
+    margin-top: 0.2rem;
+  }
+
+  .wizard-summary__edit-btn {
+    flex-shrink: 0;
+  }
 }
 
 // Fila de 1 o 2 secciones: se reparte sola y colapsa a 1 columna sin media query.
@@ -265,7 +309,7 @@
   width: 1.5rem;
   height: 1.5rem;
   border-radius: 50%;
-  background: rgba($primary, 0.08);
+  background: $tint-hover;
   color: $primary;
   display: flex;
   align-items: center;
@@ -301,16 +345,16 @@
   i { font-size: 0.7rem; }
 
   &:hover {
-    background: rgba($primary, 0.06);
+    background: $primary-tint;
     border-color: rgba($primary, 0.4);
   }
 }
 
 .wizard-summary__card {
-  background: $light;
-  border: 1px solid rgba($primary, 0.06);
-  border-radius: $border-radius-lg;
-  padding: 1rem 1.25rem;
+  background: $surface-soft;
+  border: 1px solid $border-color-soft;
+  border-radius: 0.45rem;
+  padding: 0.9rem 1rem;
 }
 
 .wizard-summary__grid {
@@ -324,12 +368,10 @@
 }
 
 .wizard-summary__label {
-  font-size: 0.65rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   color: $secondary;
-  margin-bottom: 0.2rem;
+  margin-bottom: 0.3rem;
 }
 
 .wizard-summary__value {
@@ -339,33 +381,263 @@
   overflow-wrap: break-word;
 }
 
-// Lista de títulos (la pinta staff.js dentro de #resumenTitulos)
+// Lista de títulos (la pinta empleado.js dentro de #resumenTitulos)
 .wizard-summary__titulos {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
 
-.wizard-summary__titulo-item {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
-  gap: 0.75rem 1.25rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px dashed rgba($primary, 0.12);
+// ---------- Tarjeta expandible (pisos del paso 4) ----------
+.wizard-extra-card {
+  border: 1px solid $border-color-soft;
+  border-radius: $border-radius;
+  background: $surface;
+  margin-bottom: 0.75rem;
+  overflow: hidden;
+}
 
-  &:last-child {
-    padding-bottom: 0;
-    border-bottom: none;
+.wizard-extra-card__header {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  padding: 0.9rem 1.1rem;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background: $tint-hover;
+  }
+}
+
+.wizard-extra-card__icon {
+  flex: 0 0 auto;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: $border-radius;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  background: $tint-hover;
+  color: $primary;
+
+  &--primary { background: rgba($info, 0.12); color: $info; }
+  &--green   { background: rgba($success, 0.12); color: $success; }
+  &--pink    { background: rgba($danger, 0.1); color: $danger; }
+  &--purple  { background: rgba(#7c52c5, 0.1); color: #7c52c5; }
+}
+
+.wizard-extra-card__text {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+
+  strong {
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: $primary;
+  }
+
+  span {
+    font-size: 0.74rem;
+    color: $secondary;
+  }
+}
+
+.wizard-extra-card__pill {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: $primary;
+  background: $primary-tint;
+  border-radius: $border-radius-pill;
+  padding: 0.3rem 0.7rem;
+}
+
+.wizard-extra-card__chevron {
+  flex: 0 0 auto;
+  font-size: 0.8rem;
+  color: $secondary;
+  transition: transform 0.2s ease;
+}
+
+.wizard-extra-card.is-open {
+  .wizard-extra-card__chevron {
+    transform: rotate(180deg);
+  }
+}
+
+.wizard-extra-card__body {
+  padding: 1rem 1.1rem 1.15rem;
+  border-top: 1px solid $primary-tint;
+}
+
+// ---------- Tarjeta con switch (toggles tipo "Ingreso por primera vez") ----------
+.wizard-toggle-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid $border-color-soft;
+  border-radius: $border-radius;
+  background: $surface;
+  padding: 0.9rem 1.1rem;
+}
+
+.wizard-toggle-card__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+
+  strong {
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: $primary;
+  }
+
+  span {
+    font-size: 0.74rem;
+    color: $secondary;
+  }
+}
+
+// Switch (estrella simple estilo Bootstrap form-switch)
+.wizard-switch {
+  flex: 0 0 auto;
+  position: relative;
+  display: inline-block;
+  width: 2.6rem;
+  height: 1.45rem;
+
+  input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+  }
+}
+
+.wizard-switch__slider {
+  position: absolute;
+  inset: 0;
+  border-radius: $border-radius-pill;
+  background: $border-color-soft;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+
+  &::before {
+    content: '';
+    position: absolute;
+    width: 1.05rem;
+    height: 1.05rem;
+    left: 0.2rem;
+    top: 50%;
+    transform: translateY(-50%);
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: $box-shadow-sm;
+    transition: left 0.2s ease;
+  }
+}
+
+.wizard-switch input:checked + .wizard-switch__slider {
+  background: $primary;
+
+  &::before {
+    left: calc(100% - 1.25rem);
+  }
+}
+
+/* Versión pequeña, para los switch que viven dentro de una fila de tabla (el de
+   activar/desactivar un familiar). La grande es de 2.6rem y en una celda de
+   "Acción" se sale de la columna. */
+.wizard-switch--sm {
+  width: 2.1rem;
+  height: 1.2rem;
+  vertical-align: middle;
+}
+
+.wizard-switch--sm .wizard-switch__slider::before {
+  width: 0.85rem;
+  height: 0.85rem;
+  left: 0.17rem;
+}
+
+.wizard-switch--sm input:checked + .wizard-switch__slider::before {
+  left: calc(100% - 1.02rem);
+}
+
+.wizard-switch input:disabled + .wizard-switch__slider {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+
+.wizard-switch input:focus-visible + .wizard-switch__slider {
+  outline: 2px solid $tint-active;
+  outline-offset: 2px;
+}
+
+// ---------- Nota informativa del paso 3 ----------
+.wizard-info-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.75rem 0.95rem;
+  border-radius: $border-radius-sm;
+  background: rgba($info, 0.08);
+  color: $info;
+  font-size: 0.76rem;
+  line-height: 1.4;
+
+  i {
+    flex: 0 0 auto;
+    margin-top: 0.05rem;
+    font-size: 0.9rem;
+  }
+}
+
+// ---------- Botón outline pequeño del wizard ----------
+.wizard-btn-outline-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: $primary;
+  background: transparent;
+  border: 1px solid $input-border-color;
+  border-radius: $border-radius-sm;
+  padding: 0.45rem 0.85rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    background: $tint-hover;
+    border-color: $primary;
   }
 }
 
 // ---------- Modales anidados (wizard -> modal título/institución) ----------
 // Cuando el wizard tiene un .app-modal hijo abierto encima, el backdrop
 // y el modal secundario se apilan correctamente.
+// OJO: se usa el combinador general (~) y no el adyacente (+) porque el modal
+// "Nueva Institución" (#modalNuevaInstitucion) no es hermano adyacente del
+// padre (#modalAgregarTitulo): #modalNuevoTitulo queda en medio (oculto), así
+// que con + nunca recibía el z-index superior y se abría detrás del padre.
 body.modal-open .modal-backdrop:nth-of-type(2) {
   z-index: 1056;
 }
 
-.modal.show + .modal.show {
+.modal.show ~ .modal.show {
   z-index: 1060;
 }

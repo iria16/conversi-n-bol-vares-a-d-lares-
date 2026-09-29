@@ -51,30 +51,9 @@
 
   .modal-footer {
     padding: 1rem 1.5rem 1.35rem;
-    border-top: 1px solid rgba($primary, 0.06);
+    border-top: 1px solid $primary-tint;
     gap: 0.5rem;
     justify-content: flex-end;
-  }
-}
-
-.form-section__label {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: $primary;
-  margin-bottom: 1rem;
-
-  &::before {
-    content: '';
-    width: 4px;
-    height: 1.1rem;
-    background: $primary;
-    border-radius: 2px;
-    flex-shrink: 0;
   }
 }
 
@@ -128,9 +107,6 @@
 }
 
 // Select con icono integrado (ver components/_input-icon-group.scss)
-.input-icon-group .form-select {
-  padding-left: 0.25rem;
-}
 
 // ---------- Modal de éxito / credenciales ----------
 .modal-success {
@@ -148,16 +124,6 @@
     color: $secondary;
     line-height: 1.5;
     margin-bottom: 0.75rem;
-  }
-
-  &__user {
-    font-size: 0.9rem;
-    color: $primary;
-    margin-bottom: 1.25rem;
-
-    strong {
-      font-weight: 700;
-    }
   }
 }
 

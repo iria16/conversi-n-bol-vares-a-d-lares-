@@ -1,10 +1,10 @@
 <?php
 /**
- * app/Views/staff/index.php
+ * app/Views/empleados/index.php
  * Listado de empleados (Personal > Empleados).
  *
  * Esta vista SOLO compone: cada bloque visual sale de un componente de
- * app/Views/components/ y los modales del módulo viven en staff/modals/.
+ * app/Views/components/ y los modales del módulo viven en empleados/modals/.
  *
  * Variables que pasa el controlador:
  *   Listado ..: $stats, $empleados, $cargos, $paginacion
@@ -12,9 +12,9 @@
  */
 $pageTitle       = 'Gestión de Empleados';
 $pageDescription = 'Administre el personal docente, administrativo y auxiliar de la institución.';
-$currentNav      = 'empleados}';
-$extraScripts    = ['/js/empleado.js'];
-$breadcrumbs     = [['label' => 'Personal', 'url' => null], ['label' => 'Empleados', 'url' => null]];
+$currentNav      = 'empleados';
+$extraScripts    = ['/js/empleado.js']; // la version la agrega partials/scripts.php
+$breadcrumbs     = [['label' => 'Personal', 'href' => null], ['label' => 'Empleados', 'href' => null]];
 
 // ---------- Valores por defecto (contrato de variables de la vista) ----------
 $stats            = $stats ?? ['total' => 0, 'activos' => 0, 'inactivos' => 0, 'cargos' => 0];
@@ -126,13 +126,17 @@ $panelTableBodyId       = 'tablaEmpleadosBody';
 $panelSummary           = sprintf('Mostrando %d a %d de %d empleados', (int) $paginacion['desde'], (int) $paginacion['hasta'], (int) $paginacion['total']);
 $panelSummaryId         = 'paginacionInfo';
 $panelPagination        = $paginacion;
-$panelPaginationLabel   = 'Paginación de empleados';
 include __DIR__ . '/../components/data-panel.php';
 
+$pageContent = ob_get_clean();
+
 // ---------- Modales del módulo ----------
+// Se capturan aparte de $pageContent: layouts/app.php los imprime bajo <body>,
+// fuera de .app-shell, para que no hereden overflow ni apilamiento del cascarón.
+ob_start();
 include __DIR__ . '/modals/employee-modal.php';   // wizard + modales anidados (título, institución)
 include __DIR__ . '/modals/show-modal.php';
 include __DIR__ . '/modals/edit-modal.php';
+$pageModals = ob_get_clean();
 
-$pageContent = ob_get_clean();
 require __DIR__ . '/../layouts/app.php';

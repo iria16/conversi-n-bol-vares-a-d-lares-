@@ -34,18 +34,6 @@ function getTipoCatalogoActivo() {
   return select ? select.value : '';
 }
 
-function mostrarError(mensaje, titulo) {
-  if (window.Swal) {
-    Swal.fire({
-      icon: 'error',
-      title: titulo || 'Error',
-      text: mensaje
-    });
-  } else {
-    alert((titulo ? titulo + '\n' : '') + mensaje);
-  }
-}
-
 function aplicarValidacionNombreElemento(input) {
   if (!input) return;
 
@@ -91,20 +79,11 @@ function initToggleEstadoElemento() {
     var badge = tr ? tr.querySelector('.status-badge') : null;
 
     var confirmacion = false;
-    if (window.Swal) {
-      var result = await Swal.fire({
-        title: '¿' + accion.charAt(0).toUpperCase() + accion.slice(1) + ' elemento?',
-        text: '¿Está seguro que desea ' + accion + ' este elemento del catálogo?',
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'Sí, ' + accion,
-        cancelButtonText: 'Cancelar',
-        reverseButtons: true
-      });
-      confirmacion = result.isConfirmed;
-    } else {
-      confirmacion = confirm('¿Está seguro que desea ' + accion + ' este elemento del catálogo?');
-    }
+    confirmacion = await SIGDEUI.confirmar({
+      titulo: '¿' + accion.charAt(0).toUpperCase() + accion.slice(1) + ' elemento?',
+      texto: '¿Está seguro que desea ' + accion + ' este elemento del catálogo?',
+      confirmar: 'Sí, ' + accion
+    });
 
     if (!confirmacion) {
       checkbox.checked = checkboxAnterior;
@@ -113,16 +92,12 @@ function initToggleEstadoElemento() {
 
     try {
       // 'toggleStatus' es el nombre real en la whitelist de router.php para 'catalogo'
-      var res = await fetch(baseUrl + rutaControlador + '/toggleStatus', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'id=' + encodeURIComponent(id) + '&tipo=' + encodeURIComponent(tipoActivo)
-      });
-      var data = await res.json();
+      var res = await SIGDEUI.enviar(baseUrl + rutaControlador + '/toggleStatus', { metodo: 'POST', cuerpo: { id: id, tipo: tipoActivo } });
+      var data = res.data;
 
       if (!res.ok || !data.ok) {
         checkbox.checked = checkboxAnterior;
-        mostrarError(data.mensaje || 'No se pudo actualizar el estado del elemento.');
+        SIGDEUI.mostrarError(data.mensaje || 'No se pudo actualizar el estado del elemento.');
         return;
       }
 
@@ -143,19 +118,11 @@ function initToggleEstadoElemento() {
         badge.textContent = nuevoEstadoActivo ? 'Activo' : 'Inactivo';
       }
 
-      if (window.Swal) {
-        Swal.fire({
-          title: '¡Listo!',
-          text: 'Elemento ' + accion + 'do correctamente.',
-          icon: 'success',
-          timer: 1500,
-          showConfirmButton: false
-        });
-      }
+      SIGDEUI.exito('Elemento ' + accion + 'do correctamente.', '¡Listo!');
     } catch (err) {
       checkbox.checked = checkboxAnterior;
       console.error('Error al cambiar estado:', err);
-      mostrarError('Error de conexión al actualizar el estado.');
+      SIGDEUI.mostrarError('Error de conexión al actualizar el estado.');
     }
   });
 }
@@ -187,11 +154,8 @@ function initCrearElementoForm() {
     try {
       var formData = new FormData(formCrear);
       // 'store' es el nombre real en la whitelist de router.php para 'catalogo'
-      var res = await fetch(baseUrl + rutaControlador + '/store', {
-        method: 'POST',
-        body: formData
-      });
-      var data = await res.json();
+      var res = await SIGDEUI.enviar(baseUrl + rutaControlador + '/store', { metodo: 'POST', cuerpo: formData });
+      var data = res.data;
 
       if (!res.ok || !data.ok) {
         var msgError = data.mensaje || 'No se pudo crear el elemento. Verifique los datos.';
@@ -199,7 +163,7 @@ function initCrearElementoForm() {
           var detalles = Object.values(data.data).join('\n');
           if (detalles) msgError += '\n\n' + detalles;
         }
-        mostrarError(msgError, 'Error al crear elemento');
+        SIGDEUI.mostrarError(msgError, 'Error al crear elemento');
         return;
       }
 
@@ -212,26 +176,13 @@ function initCrearElementoForm() {
       // retained focus" en consola.
       if (modalCrearEl) {
         var bsModal = bootstrap.Modal.getInstance(modalCrearEl) || new bootstrap.Modal(modalCrearEl);
-        modalCrearEl.addEventListener('hidden.bs.modal', function mostrarSwalCreado() {
-          modalCrearEl.removeEventListener('hidden.bs.modal', mostrarSwalCreado);
-
+        SIGDEUI.alCerrarModal(modalCrearEl, function mostrarSwalCreado() {
           formCrear.reset();
           formCrear.classList.remove('was-validated');
 
-          if (window.Swal) {
-            Swal.fire({
-              icon: 'success',
-              title: 'Creado',
-              text: data.mensaje || 'Elemento creado correctamente.',
-              timer: 1500,
-              showConfirmButton: false
-            }).then(function () {
-              window.location.reload();
-            });
-          } else {
-            window.location.reload();
-          }
-        }, { once: true });
+          SIGDEUI.exito(data.mensaje || 'Elemento creado correctamente.', 'Creado')
+            .then(function () { window.location.reload(); });
+        });
         bsModal.hide();
       } else {
         formCrear.reset();
@@ -241,7 +192,7 @@ function initCrearElementoForm() {
 
     } catch (err) {
       console.error('Error al procesar petición AJAX (store):', err);
-      mostrarError('Ocurrió un fallo de conexión al crear el elemento.');
+      SIGDEUI.mostrarError('Ocurrió un fallo de conexión al crear el elemento.');
     } finally {
       if (btnGuardar) {
         btnGuardar.disabled = false;
@@ -276,7 +227,7 @@ function initEditarElementoModal() {
     var formEditInner = modalEditarEl.querySelector('form');
     if (formEditInner) formEditInner.classList.remove('was-validated');
 
-    bootstrap.Modal.getOrCreateInstance(modalEditarEl).show();
+    SIGDEUI.mostrarModal(modalEditarEl);
   });
 
   var formEditar = modalEditarEl.querySelector('#formEditarElemento');
@@ -301,11 +252,8 @@ function initEditarElementoModal() {
     try {
       var formData = new FormData(formEditar);
       // 'update' es el nombre real en la whitelist de router.php para 'catalogo'
-      var res = await fetch(baseUrl + rutaControlador + '/update', {
-        method: 'POST',
-        body: formData
-      });
-      var data = await res.json();
+      var res = await SIGDEUI.enviar(baseUrl + rutaControlador + '/update', { metodo: 'POST', cuerpo: formData });
+      var data = res.data;
 
       if (!res.ok || !data.ok) {
         var msgError = data.mensaje || 'No se pudo actualizar el elemento.';
@@ -313,16 +261,14 @@ function initEditarElementoModal() {
           var detalles = Object.values(data.data).join('\n');
           if (detalles) msgError += '\n\n' + detalles;
         }
-        mostrarError(msgError, 'Error al editar elemento');
+        SIGDEUI.mostrarError(msgError, 'Error al editar elemento');
         return;
       }
 
       // Mismo motivo que en initCrearElementoForm(): esperamos a
       // hidden.bs.modal antes de disparar el Swal, para evitar el
       // conflicto de foco/aria-hidden entre Bootstrap y SweetAlert2.
-      modalEditarEl.addEventListener('hidden.bs.modal', function mostrarSwalActualizado() {
-        modalEditarEl.removeEventListener('hidden.bs.modal', mostrarSwalActualizado);
-
+      SIGDEUI.alCerrarModal(modalEditarEl, function mostrarSwalActualizado() {
         var id = formData.get('id');
         // 'nuevoNombre' se toma de data.data.nombre (lo que el backend
         // realmente guardó, ya pasado por capitalizarTitulo()) y no de
@@ -346,22 +292,14 @@ function initEditarElementoModal() {
           if (toggleInput) toggleInput.setAttribute('aria-label', 'Activar o desactivar ' + (nuevoNombre || ''));
         }
 
-        if (window.Swal) {
-          Swal.fire({
-            icon: 'success',
-            title: 'Actualizado',
-            text: data.mensaje || 'Elemento actualizado correctamente.',
-            timer: 1500,
-            showConfirmButton: false
-          });
-        }
-      }, { once: true });
+        SIGDEUI.exito(data.mensaje || 'Elemento actualizado correctamente.', 'Actualizado');
+      });
 
-      bootstrap.Modal.getOrCreateInstance(modalEditarEl).hide();
+      SIGDEUI.ocultarModal(modalEditarEl);
 
     } catch (err) {
       console.error('Error al procesar petición AJAX (update):', err);
-      mostrarError('Ocurrió un fallo de conexión al editar el elemento.');
+      SIGDEUI.mostrarError('Ocurrió un fallo de conexión al editar el elemento.');
     } finally {
       if (btnGuardar) {
         btnGuardar.disabled = false;

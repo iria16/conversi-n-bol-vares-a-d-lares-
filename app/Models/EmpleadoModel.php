@@ -4,51 +4,33 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Exceptions\DocumentoDuplicadoException;
 use App\Interfaces\Creatable;
 use App\Interfaces\Listable;
 use App\Interfaces\Toggleable;
 use App\Interfaces\Updatable;
+use App\Support\Instituciones;
+use App\Traits\AvatarTrait;
+use App\Traits\ContactoDireccionTrait;
 use PDO;
+use PDOException;
 use PDOStatement;
 use RuntimeException;
 use Throwable;
 
 /**
- * EmpleadoModel
- *
- * Modelo del módulo Personal > Empleados. Un empleado son dos filas:
- * los datos personales viven en `persona` y lo laboral (cargo, fechas de
- * ingreso y egreso) en `empleado`, enlazadas por id_persona. El estado
- * ACTIVO/INACTIVO NO está en `empleado`: vive en `persona.estado`.
- * Por eso create() y update() escriben en ambas tablas dentro de una
- * transacción.
- *
- * Qué implementa y qué no:
- *  - Listable: sobrescribo getAll() y countAll(), que son los que consume
- *    ListableIndexTrait. Lo hago porque el listado necesita JOIN con persona
- *    y cargo, y el SELECT * de una sola tabla de BaseModel no alcanza.
- *  - Creatable y Updatable: los sobrescribo porque BaseModel solo sabe
- *    insertar/actualizar en una tabla.
- *  - Toggleable: sobrescribo toggleStatus() porque el de BaseModel alterna
- *    el campo en la tabla del modelo (`empleado`), y ahí no hay estado.
- *  - Deletable: NO lo implemento a propósito. Al personal se le desactiva,
- *    no se le borra, así EmpleadoController responde 405 a delete().
- *
- * Los filtros llegan con los nombres de la vista (q, cargo, estado) y los
- * traduzco con mi propio buildFilters().
- *
- * @author Logística
- * @package App\Models
+ * Módulo Personal > Empleados: reparte los datos en persona (incluye el estado ACTIVO/INACTIVO), empleado, contacto, direccion y formacion_academica (borrado lógico).
+ * create() y update() escriben todas las filas en una sola transacción; no implementa Deletable, al personal se le desactiva y delete() responde 405.
+ * Sobrescribe getAll/countAll (JOIN con persona y cargo), create/update y toggleStatus, y traduce los filtros de la vista (q, cargo, estado) con buildFilters().
  */
 class EmpleadoModel extends BaseModel implements Listable, Creatable, Updatable, Toggleable
 {
+    use AvatarTrait;
+    use ContactoDireccionTrait;
     protected string $table      = 'empleado';
     protected string $primaryKey = 'id_empleado';
 
-    /**
-     * Columnas de `persona` que este módulo puede escribir. Es la lista
-     * blanca: lo que no esté aquí se descarta antes de armar el SQL.
-     */
+    /** Columnas de `persona` que este módulo puede escribir (lista blanca; lo demás se descarta). */
     private const CAMPOS_PERSONA = [
         'tipo_documento',
         'numero_documento',
@@ -58,24 +40,25 @@ class EmpleadoModel extends BaseModel implements Listable, Creatable, Updatable,
         'primer_apellido',
         'segundo_apellido',
         'sexo',
-        'nacionalidad',
+        'foto',
     ];
 
     /** Columnas de `persona` que aceptan NULL: si llegan vacías, guardo NULL. */
-    private const PERSONA_NULABLES = ['segundo_nombre', 'segundo_apellido'];
+    private const PERSONA_NULABLES = ['segundo_nombre', 'segundo_apellido', 'foto'];
 
     /** Columnas de `empleado` que update() puede modificar. */
     private const CAMPOS_EMPLEADO = ['id_cargo', 'fecha_ingreso'];
 
+    // Las columnas escribibles de `contacto` y `direccion` y el SQL del upsert viven en ContactoDireccionTrait.
+
     /**
-     * Catálogos de los modales: clave que espera la vista => tabla.
-     * Todas tienen `nombre` y `estado`; solo devuelvo los ACTIVO.
+     * Catálogos de los modales: clave que espera la vista => tabla (solo los ACTIVO).
+     * 'instituciones' se filtra por tipo (getInstitucionesFormulario()) y 'tipos_institucion' sale del enum Instituciones.
      */
     private const CATALOGOS = [
         'grados_academicos' => 'grado_academico',
         'titulos'           => 'titulo',
         'instituciones'     => 'institucion',
-        'tipos_institucion' => 'tipo_institucion',
         'estados'           => 'estado',
     ];
 
@@ -91,16 +74,14 @@ class EmpleadoModel extends BaseModel implements Listable, Creatable, Updatable,
         p.estado,
         p.tipo_documento, p.numero_documento, p.fecha_nacimiento,
         p.primer_nombre, p.segundo_nombre, p.primer_apellido, p.segundo_apellido,
-        p.sexo, p.nacionalidad, p.foto,
+        p.sexo, p.foto,
         c.nombre AS cargo,
         ' . self::NOMBRE_COMPLETO . ' AS nombre_completo';
 
     // ---------- Listado (contrato Listable) ----------
 
     /**
-     * Cuenta los empleados que cumplen los filtros (para la paginación).
-     *
-     * @param array $filters q, cargo y estado, como los deja el controlador.
+     * Cuenta los empleados que cumplen los filtros (q, cargo y estado), para la paginación.
      */
     public function countAll(array $filters = []): int
     {
@@ -118,11 +99,7 @@ class EmpleadoModel extends BaseModel implements Listable, Creatable, Updatable,
     }
 
     /**
-     * Trae una página de empleados, del más reciente al más antiguo.
-     *
-     * @param array $filters q, cargo y estado.
-     * @param int   $page    Número de página (desde 1).
-     * @param int   $perPage Filas por página.
+     * Trae una página de empleados, del más reciente al más antiguo, con los filtros q, cargo y estado.
      */
     public function getAll(array $filters = [], int $page = 1, int $perPage = 10): array
     {
@@ -142,19 +119,12 @@ class EmpleadoModel extends BaseModel implements Listable, Creatable, Updatable,
         $stmt->bindValue(':offset', ($page - 1) * $perPage, PDO::PARAM_INT);
         $stmt->execute();
 
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return array_map([$this, 'enriquecerAvatar'], $stmt->fetchAll(PDO::FETCH_ASSOC));
     }
 
     /**
-     * Traduce los filtros de la vista a condiciones SQL.
-     *
-     *  - q       → búsqueda por cédula, nombre completo o cargo (LIKE).
-     *  - cargo   → id_cargo exacto.
-     *  - estado  → 'activo'/'inactivo' de la vista, en mayúsculas para el
-     *              ENUM de persona.estado.
-     *
-     * Cada LIKE lleva su propio placeholder (q0, q1, ...): no repito nombres
-     * porque con prepares nativos PDO no lo permite.
+     * Traduce los filtros de la vista a SQL: q (cédula, nombre o cargo con LIKE), cargo (id exacto) y estado ('activo'/'inactivo').
+     * Cada LIKE lleva su propio placeholder (q0, q1...) porque con prepares nativos PDO no admite repetirlos.
      *
      * @return array{0: string[], 1: array<string, mixed>}
      */
@@ -234,8 +204,7 @@ class EmpleadoModel extends BaseModel implements Listable, Creatable, Updatable,
     }
 
     /**
-     * Catálogos activos que necesitan los modales (wizard, título e institución).
-     * Las claves del resultado son las de CATALOGOS.
+     * Catálogos activos que necesitan los modales (wizard, título e institución), con las claves de CATALOGOS.
      *
      * @return array<string, array>
      */
@@ -244,19 +213,73 @@ class EmpleadoModel extends BaseModel implements Listable, Creatable, Updatable,
         $catalogos = [];
 
         foreach (self::CATALOGOS as $clave => $tabla) {
+            // 'instituciones' tiene su propia consulta (JOIN + filtro por tipo).
+            if ($clave === 'instituciones') {
+                $catalogos[$clave] = $this->getInstitucionesFormulario();
+                continue;
+            }
+
             $catalogos[$clave] = $this->pdo
                 ->query("SELECT * FROM {$tabla} WHERE estado = 'ACTIVO' ORDER BY nombre")
                 ->fetchAll(PDO::FETCH_ASSOC);
         }
 
+        // Los tipos salen del enum Instituciones, no de una tabla; aquí solo vale TIPO_TITULO_ACADEMICO.
+        $catalogos['tipos_institucion'] = (new InstitucionModel($this->pdo))
+            ->tiposFormulario([Instituciones::TIPO_TITULO_ACADEMICO]);
+
         return $catalogos;
+    }
+
+    /**
+     * Indica si existe el catálogo al que apunta una FK NOT NULL del formulario ('grado_academico', 'titulo' o 'institucion').
+     * El controlador lo pregunta antes de guardar para responder 422 con el error del campo en vez de un 500.
+     * El tipo de institución no se valida aquí: lo resuelve InstitucionModel contra el enum.
+     */
+    public function existeCatalogo(string $catalogo, int $id): bool
+    {
+        $permitidos = [
+            'grado_academico' => 'id_grado_academico',
+            'titulo'          => 'id_titulo',
+            'institucion'     => 'id_institucion',
+        ];
+
+        if (!isset($permitidos[$catalogo]) || $id <= 0) {
+            return false;
+        }
+
+        $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM {$catalogo} WHERE {$permitidos[$catalogo]} = :id");
+        $stmt->execute(['id' => $id]);
+
+        return (int) $stmt->fetchColumn() > 0;
+    }
+
+    /**
+     * Instituciones ACTIVO del <select> del paso 5, solo las de tipo TIPO_TITULO_ACADEMICO.
+     * Filtra por el código del enum que guarda `institucion.tipo`, sin depender de una tabla de tipos.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function getInstitucionesFormulario(): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT i.*
+             FROM institucion i
+             WHERE i.estado = 'ACTIVO'
+               AND i.tipo = :tipo
+             ORDER BY i.nombre"
+        );
+        $stmt->execute(['tipo' => Instituciones::TIPO_TITULO_ACADEMICO]);
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     // ---------- Lectura puntual ----------
 
     /**
-     * Un empleado con sus datos personales y el nombre del cargo.
-     * Sobrescribe el de BaseModel para devolver el mismo formato del listado.
+     * Un empleado con datos personales, cargo, contacto, dirección y formación (sobrescribe el de BaseModel).
+     * Sirve a los modales "Ver" (telefono, correo, formacion en texto) y "Editar" (campos planos de contacto,
+     * dirección y el primer título, porque el modal edita una sola fila).
      */
     public function getById(int $id): ?array
     {
@@ -265,15 +288,157 @@ class EmpleadoModel extends BaseModel implements Listable, Creatable, Updatable,
         );
         $stmt->execute(['id' => $id]);
 
+        $empleado = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$empleado) {
+            return null;
+        }
+
+        // Contacto (una fila por persona), también como campos planos para el modal de edición.
+        $contacto = $this->findContacto((int) $empleado['id_persona']);
+        if ($contacto) {
+            $empleado = array_merge($empleado, $contacto);
+            $empleado['telefono'] = trim(
+                ($contacto['codigo_telefono_principal'] ?? '') . '-' . ($contacto['numero_telefono_principal'] ?? ''),
+                '-'
+            ) ?: null;
+        } else {
+            $empleado['telefono'] = null;
+        }
+
+        // Dirección de habitación, con id_municipio e id_estado para repoblar la cascada del modal de edición.
+        $direccion = $this->findDireccion((int) $empleado['id_persona']);
+        if ($direccion) {
+            $empleado = array_merge($empleado, $direccion);
+        }
+
+        // Formación: lista completa para el detalle y primer registro para la edición.
+        $formacion = $this->findFormacion((int) $empleado['id_empleado']);
+        $empleado['formacion'] = $this->formatearFormacion($formacion);
+
+        if ($formacion !== []) {
+            $primera = $formacion[0];
+            $empleado['id_titulo']          = $primera['id_titulo'];
+            $empleado['id_grado_academico'] = $primera['id_grado_academico'];
+            $empleado['id_institucion']     = $primera['id_institucion'];
+            $empleado['fecha_obtencion']    = $primera['fecha_obtencion'];
+        }
+
+        return $this->enriquecerAvatar($empleado);
+    }
+
+    /**
+     * Agrega a la fila las claves de avatar (avatar_tipo, avatar_foto, iniciales, avatar_color) según AvatarTrait.
+     * Las consumen components/avatar.php y el JS de los modales.
+     */
+    private function enriquecerAvatar(array $fila): array
+    {
+        $avatar = $this->resolverAvatar(
+            $fila['foto'] ?? null,
+            $fila['primer_nombre'] ?? null,
+            $fila['primer_apellido'] ?? null,
+            $fila['rol'] ?? null,
+            $fila['nombre_completo'] ?? 'E'
+        );
+
+        $fila['avatar_tipo']    = $avatar['tipo'];
+        $fila['avatar_foto']    = $avatar['foto'];
+        $fila['iniciales']      = $avatar['iniciales'];
+        $fila['avatar_color']   = $avatar['avatar_color'];
+
+        return $fila;
+    }
+
+    /**
+     * Fila de contacto de una persona, o null si no tiene.
+     */
+    private function findContacto(int $idPersona): ?array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT ' . implode(', ', self::COLUMNAS_CONTACTO) . '
+             FROM contacto WHERE id_persona = :id_persona LIMIT 1'
+        );
+        $stmt->execute(['id_persona' => $idPersona]);
+
         return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     }
 
     /**
-     * Indica si ya existe un empleado con esa cédula.
+     * Fila de dirección de una persona, o null si no tiene.
+     * Aporta también id_municipio e id_estado (cascada parroquia->municipio->estado) para repoblar los <select>.
+     */
+    private function findDireccion(int $idPersona): ?array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT d.id_parroquia, d.sector_urbanizacion, d.calle_avenida,
+                    d.nro_casa_apto, d.punto_referencia,
+                    m.id_municipio, e.id_estado,
+                    e.nombre AS estado_nombre,
+                    m.nombre AS municipio_nombre,
+                    p.nombre AS parroquia_nombre
+             FROM direccion d
+             INNER JOIN parroquia p ON p.id_parroquia = d.id_parroquia
+             INNER JOIN municipio m ON m.id_municipio = p.id_municipio
+             INNER JOIN estado e    ON e.id_estado = m.id_estado
+             WHERE d.id_persona = :id_persona LIMIT 1'
+        );
+        $stmt->execute(['id_persona' => $idPersona]);
+
+        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+
+    /**
+     * Formación académica ACTIVA de un empleado con los nombres de título, grado e institución, o [] si no tiene.
      *
-     * $ignorarId es el id_empleado que se está editando: lo excluyo para que
-     * el propio registro no cuente como duplicado (lo usa update() del
-     * controlador).
+     * @return array<int, array<string, mixed>>
+     */
+    private function findFormacion(int $idEmpleado): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT fa.id_titulo, fa.id_grado_academico, fa.id_institucion,
+                    fa.fecha_obtencion,
+                    t.nombre AS titulo_nombre,
+                    g.nombre AS grado_nombre,
+                    i.nombre AS institucion_nombre
+             FROM formacion_academica fa
+             INNER JOIN titulo t           ON t.id_titulo = fa.id_titulo
+             LEFT JOIN grado_academico g   ON g.id_grado_academico = fa.id_grado_academico
+             LEFT JOIN institucion i       ON i.id_institucion = fa.id_institucion
+             WHERE fa.id_empleado = :id_empleado AND fa.estado = \'ACTIVO\'
+             ORDER BY fa.fecha_obtencion'
+        );
+        $stmt->execute(['id_empleado' => $idEmpleado]);
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Arma el texto de las formaciones para el modal de detalle, p. ej. "Lic. en Educación (Universidad Caldas) · 2020".
+     */
+    private function formatearFormacion(array $formacion): ?string
+    {
+        $textos = [];
+
+        foreach ($formacion as $fila) {
+            $titulo    = trim((string) $fila['titulo_nombre']);
+            $grado     = trim((string) $fila['grado_nombre']);
+            $institucion = trim((string) $fila['institucion_nombre']);
+            $fecha     = trim((string) $fila['fecha_obtencion']);
+            $anio      = $fecha !== '' ? date('Y', strtotime($fecha)) : '';
+
+            $parte = trim(implode(' ', array_filter([$titulo, $grado, $institucion])));
+
+            $textos[] = $anio !== '' ? "{$parte} · {$anio}" : $parte;
+        }
+
+        $texto = implode('; ', array_filter($textos));
+
+        return $texto !== '' ? $texto : null;
+    }
+
+    /**
+     * Indica si ya existe un empleado con esa cédula; $ignorarId excluye al que se está editando.
+     * Es la validación previa al INSERT; la garantía real es el UNIQUE de persona.numero_documento,
+     * que buscarOCrearPersona() traduce a DocumentoDuplicadoException en altas concurrentes.
      */
     public function existeDocumento(string $numero, ?int $ignorarId = null): bool
     {
@@ -291,19 +456,43 @@ class EmpleadoModel extends BaseModel implements Listable, Creatable, Updatable,
         return $stmt->fetchColumn() !== false;
     }
 
+    // ---------- Ubicación: cascada del wizard ----------
+
+    /**
+     * Municipios ACTIVO de un estado, para el <select> del paso 3 del wizard.
+     */
+    public function getMunicipiosPorEstado(int $idEstado): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT id_municipio, nombre FROM municipio
+             WHERE id_estado = :id_estado AND estado = 'ACTIVO' ORDER BY nombre"
+        );
+        $stmt->execute(['id_estado' => $idEstado]);
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Parroquias ACTIVO de un municipio, para el <select> del paso 3 del wizard.
+     */
+    public function getParroquiasPorMunicipio(int $idMunicipio): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT id_parroquia, nombre FROM parroquia
+             WHERE id_municipio = :id_municipio AND estado = 'ACTIVO' ORDER BY nombre"
+        );
+        $stmt->execute(['id_municipio' => $idMunicipio]);
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     // ---------- Escritura ----------
 
     /**
-     * Registra un empleado: la persona (si no existía) y su fila en `empleado`.
+     * Registra un empleado (persona si no existía, empleado, contacto, dirección y títulos) en una sola transacción.
+     * Si la cédula ya está en `persona` con otro rol, la reutiliza en vez de duplicarla; que ya sea empleado lo detecta el controlador.
      *
-     * `persona.numero_documento` es UNIQUE en toda la tabla, así que busco
-     * primero por número: si esa persona ya está en el sistema con otro rol,
-     * la reutilizo en lugar de duplicarla. Que ya sea empleado lo detecta el
-     * controlador con existeDocumento() antes de llegar aquí.
-     *
-     * Todo va en una transacción: o se guardan las dos filas o ninguna.
-     *
-     * @param array $data Datos de extractData() (persona + id_cargo + fecha_ingreso).
+     * @throws DocumentoDuplicadoException Si dos altas simultáneas chocan con la misma cédula.
      */
     public function create(array $data): bool
     {
@@ -324,6 +513,18 @@ class EmpleadoModel extends BaseModel implements Listable, Creatable, Updatable,
                 ]
             );
 
+            $idEmpleado = (int) $this->pdo->lastInsertId();
+
+            if (!empty($data['contacto'])) {
+                $this->guardarContacto($idPersona, $data['contacto']);
+            }
+
+            if (!empty($data['direccion'])) {
+                $this->guardarDireccion($idPersona, $data['direccion']);
+            }
+
+            $this->reemplazarFormacion($idEmpleado, $data['formacion'] ?? []);
+
             $this->pdo->commit();
             return true;
         } catch (Throwable $e) {
@@ -333,13 +534,9 @@ class EmpleadoModel extends BaseModel implements Listable, Creatable, Updatable,
     }
 
     /**
-     * Actualiza los datos personales, el cargo y la fecha de ingreso.
-     *
-     * Ojo: los datos personales se guardan en `persona`, así que si esa
-     * persona tiene otros roles en el sistema, el cambio también se ve ahí.
-     *
-     * @param int   $id   id_empleado.
-     * @param array $data Datos de extractData().
+     * Actualiza datos personales, cargo, fecha de ingreso, contacto, dirección y formación; $id es el id_empleado.
+     * Los datos personales viven en `persona`, así que si tiene otros roles el cambio también se ve ahí.
+     * El modal no envía los teléfonos alternativos, así que solo se actualizan las columnas de contacto que llegaron.
      */
     public function update(int $id, array $data): bool
     {
@@ -376,6 +573,21 @@ class EmpleadoModel extends BaseModel implements Listable, Creatable, Updatable,
                 );
             }
 
+            if (!empty($data['contacto'])) {
+                $this->guardarContacto((int) $idPersona, $data['contacto']);
+            }
+
+            // El bloque de dirección del modal siempre trae parroquia; guardarDireccion() inserta o actualiza.
+            if (!empty($data['direccion'])) {
+                $this->guardarDireccion((int) $idPersona, $data['direccion']);
+            }
+
+            // Solo se reemplaza la formación si llega una fila completa; vacío conserva la existente
+            // (evita borrar títulos en silencio al editar otros datos).
+            if (!empty($data['formacion'])) {
+                $this->reemplazarFormacion($id, $data['formacion']);
+            }
+
             $this->pdo->commit();
             return true;
         } catch (Throwable $e) {
@@ -385,16 +597,8 @@ class EmpleadoModel extends BaseModel implements Listable, Creatable, Updatable,
     }
 
     /**
-     * Activa o desactiva a un empleado alternando `persona.estado`.
-     *
-     * Sobrescribe el de BaseModel, que tocaría la tabla `empleado` (sin
-     * columna de estado). Se conserva $field solo para mantener la firma del
-     * padre; aquí el campo siempre es persona.estado.
-     *
-     * Ojo: como el estado es de la persona, desactivar a un empleado también
-     * la marca inactiva en cualquier otro rol que tenga.
-     *
-     * @param int $id id_empleado.
+     * Activa o desactiva al empleado alternando `persona.estado`, porque `empleado` no tiene estado.
+     * Conserva $field solo por la firma del padre; desactivarlo también inactiva a la persona en sus otros roles.
      */
     public function toggleStatus(int $id, string $field = 'estado'): bool
     {
@@ -409,9 +613,11 @@ class EmpleadoModel extends BaseModel implements Listable, Creatable, Updatable,
     // ---------- Apoyo interno ----------
 
     /**
-     * Devuelve el id_persona de quien tenga ese número de documento o, si no
-     * existe, crea la persona y devuelve el nuevo id. El estado queda en el
-     * valor por defecto de la tabla (ACTIVO).
+     * Devuelve el id_persona de esa cédula o, si no existe, crea la persona y devuelve el nuevo id.
+     * El SELECT previo es una optimización; la unicidad la da el UNIQUE de la BD, cuya violación (SQLSTATE 23000)
+     * se traduce a DocumentoDuplicadoException para responder 422 en vez de 500.
+     *
+     * @throws DocumentoDuplicadoException Si la cédula ya existe en `persona`.
      */
     private function buscarOCrearPersona(array $data): int
     {
@@ -430,14 +636,25 @@ class EmpleadoModel extends BaseModel implements Listable, Creatable, Updatable,
         $sql      = 'INSERT INTO persona (' . implode(', ', $columnas) . ') VALUES ('
                   . implode(', ', array_map(fn (string $c) => ":{$c}", $columnas)) . ')';
 
-        $this->ejecutar($this->pdo->prepare($sql), $persona);
+        try {
+            $this->ejecutar($this->pdo->prepare($sql), $persona);
+        } catch (PDOException $e) {
+            // Solo es "cédula duplicada" si el motor señala numero_documento; otras violaciones siguen como error genérico.
+            if ($e->getCode() === '23000' && str_contains($e->getMessage(), 'numero_documento')) {
+                throw new DocumentoDuplicadoException(
+                    'Ya existe una persona registrada con esa cédula.',
+                    0,
+                    $e
+                );
+            }
+            throw $e;
+        }
 
         return (int) $this->pdo->lastInsertId();
     }
 
     /**
-     * Filtra $data dejando solo las columnas permitidas de `persona`, y
-     * convierte a NULL las opcionales que vengan vacías.
+     * Deja en $data solo las columnas permitidas de `persona` y convierte a NULL las opcionales vacías.
      */
     private function soloCamposPersona(array $data): array
     {
@@ -453,8 +670,41 @@ class EmpleadoModel extends BaseModel implements Listable, Creatable, Updatable,
     }
 
     /**
-     * Ejecuta y, si falla sin lanzar excepción (según el modo de error de
-     * PDO), la lanzo yo para que la transacción se revierta.
+     * Reemplaza la formación con borrado lógico: pone las filas anteriores en INACTIVO y agrega las nuevas como ACTIVO.
+     * Cada fila debe traer id_titulo, id_grado_academico e id_institucion (NOT NULL); si falta alguno, el INSERT falla
+     * y se revierte la transacción. Asume que `formacion_academica` tiene columna `estado`.
+     *
+     * @param array $filas Lista de {id_titulo, id_grado_academico, id_institucion, fecha_obtencion}.
+     */
+    private function reemplazarFormacion(int $idEmpleado, array $filas): void
+    {
+        $this->ejecutar(
+            $this->pdo->prepare(
+                "UPDATE formacion_academica SET estado = 'INACTIVO' WHERE id_empleado = :id_empleado"
+            ),
+            ['id_empleado' => $idEmpleado]
+        );
+
+        $sql = 'INSERT INTO formacion_academica
+                    (id_empleado, id_titulo, id_grado_academico, id_institucion, fecha_obtencion, estado)
+                VALUES
+                    (:id_empleado, :id_titulo, :id_grado_academico, :id_institucion, :fecha_obtencion, \'ACTIVO\')';
+
+        $stmt = $this->pdo->prepare($sql);
+
+        foreach ($filas as $fila) {
+            $this->ejecutar($stmt, [
+                'id_empleado'        => $idEmpleado,
+                'id_titulo'          => (int) ($fila['id_titulo'] ?? 0),
+                'id_grado_academico' => (int) ($fila['id_grado_academico'] ?? 0),
+                'id_institucion'     => (int) ($fila['id_institucion'] ?? 0),
+                'fecha_obtencion'    => $fila['fecha_obtencion'] ?? null,
+            ]);
+        }
+    }
+
+    /**
+     * Ejecuta la sentencia y, si falla sin lanzar excepción, la lanza para que la transacción se revierta.
      */
     private function ejecutar(PDOStatement $stmt, array $params): void
     {

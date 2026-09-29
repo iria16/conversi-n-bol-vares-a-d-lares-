@@ -11,17 +11,31 @@ $stats = $stats ?? ['pendientes' => 0, 'aprobados' => 0, 'rechazados' => 0];
 $solicitudes = $solicitudes ?? [];
 $aniosEscolares = $aniosEscolares ?? [];
 $motivos = $motivos ?? [];
+// El controlador decide qué puede hacer cada rol: la secretaria registra los
+// retiros y el directivo los aprueba/rechaza.
+$puedeRegistrar = $puedeRegistrar ?? false;
+$puedeResolver = $puedeResolver ?? false;
+$estudiantesDisponibles = $estudiantesDisponibles ?? [];
 $paginacion = $paginacion ?? [
     'desde' => 0, 'hasta' => 0, 'total' => 0, 'pagina_actual' => 1, 'total_paginas' => 1,
 ];
 ob_start();
 
   // ---------- Page header ----------
-  // Esta vista no tiene botón de acción (a diferencia de las anteriores,
-  // que abren un modal de "Nuevo..."), así que no se pasa $pageHeaderActions.
+  // El botón de "Registrar retiro" solo lo ve quien puede crearlo (secretaria);
+  // el resto de la vista es de consulta para los dos roles.
+  ob_start();
+  if ($puedeRegistrar):
+  ?>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#registrarRetiroModal">
+      <i class="bi bi-box-arrow-right me-1" aria-hidden="true"></i> Registrar Retiro
+    </button>
+  <?php
+  endif;
+  $pageHeaderActions = ob_get_clean();
   $pageHeading    = 'Retiros Pendientes';
   $pageSubheading = $pageDescription;
-  include __DIR__ . '/../components/page-header.php';
+  include __DIR__ . '/../../components/page-header.php';
 ?>
 
 <!-- ---------- Stat cards ---------- -->
@@ -40,7 +54,7 @@ ob_start();
         $statValue = $card['value'];
         $statIcon  = $card['icon'];
         $statTone  = $card['tone'];
-        include __DIR__ . '/../components/stat-card.php';
+        include __DIR__ . '/../../components/stat-card.php';
       ?>
     </div>
   <?php endforeach; ?>
@@ -130,7 +144,7 @@ ob_start();
             $avatarTone     = 'primary';
             $avatarSrc      = '';
             $avatarAlt      = $estudiante;
-            include __DIR__ . '/../components/avatar.php';
+            include __DIR__ . '/../../components/avatar.php';
           ?>
           <div>
             <div class="avatar-group__name"><?= htmlspecialchars($estudiante) ?></div>
@@ -150,7 +164,7 @@ ob_start();
         <?php
           $badgeLabel  = ucfirst($estado);
           $badgeStatus = $estadoClase;
-          include __DIR__ . '/../components/status-badge.php';
+          include __DIR__ . '/../../components/status-badge.php';
         ?>
       </td>
       <td class="text-center">
@@ -168,7 +182,7 @@ ob_start();
             title="Ver solicitud">
             <i class="bi bi-eye"></i>
           </button>
-          <?php if ($estado === 'pendiente'): ?>
+          <?php if ($puedeResolver && $estado === 'pendiente'): ?>
             <button type="button" class="action-btn aprobar-retiro" data-id="<?= (int) $item['id'] ?>" title="Aprobar retiro">
               <i class="bi bi-check-circle"></i>
             </button>
@@ -197,15 +211,105 @@ ob_start();
       'total_paginas' => $paginacion['total_paginas'],
   ];
 
-  include __DIR__ . '/../components/data-panel.php';
+  include __DIR__ . '/../../components/data-panel.php';
 ?>
 
 <?php
-$modalId       = 'detalleRetiroModal';
-$modalTitle    = 'Detalle de Retiro';
-$modalSubtitle = 'Información de la solicitud seleccionada.';
+$pageContent = ob_get_clean();
+
+// ---------- Modales ----------
+// Se capturan aparte de $pageContent: layouts/app.php los imprime bajo <body>,
+// fuera de .app-shell, para que no hereden overflow ni apilamiento del cascarón.
 ob_start();
-?>
+
+  // ---------- Modal: registrar retiro (solo secretaria) ----------
+  if ($puedeRegistrar):
+      $hayEstudiantes = !empty($estudiantesDisponibles);
+      $hayMotivos      = !empty($motivos);
+  ob_start();
+  ?>
+  <form id="formRegistrarRetiro" novalidate>
+    <div class="mb-3">
+      <label for="retiroEstudiante" class="label-sigde">Estudiante</label>
+      <div class="input-icon-group">
+        <i class="bi bi-person-vcard" aria-hidden="true"></i>
+        <select class="form-select" id="retiroEstudiante" name="id_matricula" required <?= $hayEstudiantes ? '' : 'disabled' ?>>
+          <option value="" selected disabled>Seleccionar estudiante</option>
+          <?php foreach ($estudiantesDisponibles as $candidato): ?>
+            <option value="<?= (int) $candidato['id_matricula'] ?>">
+              <?= htmlspecialchars($candidato['nombre'] . ' · ' . $candidato['cedula'] . ' · ' . $candidato['grado'] . ' "'
+                  . $candidato['seccion'] . '"') ?>
+            </option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <?php if (!$hayEstudiantes): ?>
+        <div class="form-text text-danger">No hay estudiantes disponibles para registrar retiro.</div>
+      <?php else: ?>
+        <div class="invalid-feedback">Seleccione el estudiante.</div>
+      <?php endif; ?>
+    </div>
+
+    <div class="mb-3">
+      <label for="retiroMotivo" class="label-sigde">Motivo del retiro</label>
+      <div class="input-icon-group">
+        <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
+        <select class="form-select" id="retiroMotivo" name="id_motivo_retiro" required <?= $hayMotivos ? '' : 'disabled' ?>>
+          <option value="" selected disabled>Seleccionar motivo</option>
+          <?php foreach ($motivos as $motivo): ?>
+            <option value="<?= (int) $motivo['id'] ?>">
+              <?= htmlspecialchars($motivo['nombre']) ?>
+            </option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <?php if (!$hayMotivos): ?>
+        <div class="form-text text-danger">No hay motivos de retiro configurados.</div>
+      <?php else: ?>
+        <div class="invalid-feedback">Seleccione el motivo.</div>
+      <?php endif; ?>
+    </div>
+
+    <div class="mb-0">
+      <label for="retiroObservaciones" class="label-sigde">Observaciones</label>
+      <textarea class="form-control" id="retiroObservaciones" name="observaciones"
+                rows="3" maxlength="500" placeholder="Detalle opcional de la solicitud"></textarea>
+    </div>
+
+    <div class="info-alert mt-3">
+      <span class="info-alert__icon"><i class="bi bi-info-circle-fill" aria-hidden="true"></i></span>
+      <div>
+        <p class="info-alert__title">Queda pendiente de aprobación</p>
+        <p class="info-alert__text">El retiro se registra como pendiente; el directivo lo aprueba o rechaza desde el listado.</p>
+      </div>
+    </div>
+  </form>
+  <?php
+      $modalBody = ob_get_clean();
+
+      ob_start();
+  ?>
+  <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+  <button type="submit" form="formRegistrarRetiro" id="btnRegistrarRetiro" class="btn btn-primary"
+          <?= ($hayEstudiantes && $hayMotivos) ? '' : 'disabled' ?>>
+    <i class="bi bi-box-arrow-right me-1" aria-hidden="true"></i> Registrar retiro
+  </button>
+  <?php
+      $modalFooter = ob_get_clean();
+
+      $modalId       = 'registrarRetiroModal';
+      $modalTitle    = 'Registrar Retiro';
+      $modalSubtitle = 'La solicitud quedará pendiente hasta que el directivo la apruebe o rechace.';
+      include __DIR__ . '/../../components/modal.php';
+      unset($modalBody, $modalFooter, $modalId, $modalTitle, $modalSubtitle, $hayEstudiantes, $hayMotivos);
+  endif;
+
+  // ---------- Modal: detalle de la solicitud ----------
+  $modalId       = 'detalleRetiroModal';
+  $modalTitle    = 'Detalle de Retiro';
+  $modalSubtitle = 'Información de la solicitud seleccionada.';
+  ob_start();
+  ?>
 <div class="user-detail__header">
   <?php
     $avatarInitials = 'E';
@@ -213,7 +317,7 @@ ob_start();
     $avatarTone     = 'primary';
     $avatarSrc      = '';
     $avatarAlt      = '';
-    include __DIR__ . '/../components/avatar.php';
+    include __DIR__ . '/../../components/avatar.php';
   ?>
   <div class="user-detail__name" id="retiroDetalleNombre">—</div>
   <div class="user-detail__meta">
@@ -248,7 +352,8 @@ ob_start();
 <?php
 $modalBody = ob_get_clean();
 $modalFooter = '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>';
-include __DIR__ . '/../components/modal.php';
+include __DIR__ . '/../../components/modal.php';
 
-$pageContent = ob_get_clean();
-require __DIR__ . '/../layouts/app.php';
+$pageModals = ob_get_clean();
+
+require __DIR__ . '/../../layouts/app.php';

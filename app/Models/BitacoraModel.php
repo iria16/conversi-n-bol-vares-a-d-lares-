@@ -11,34 +11,9 @@ use PDO;
 use Throwable;
 
 /**
- * Modelo de la Bitácora del Sistema.
- *
- * Combina dos responsabilidades relacionadas sobre la misma tabla:
- *  - registrar(): usado por otros controladores para auditar sus
- *    propias acciones (INSERT). Deliberadamente tolerante a fallos —
- *    un error al auditar nunca debe tumbar la acción del usuario,
- *    solo queda en error_log.
- *  - getAll()/countAll()/getAllForExport()/stats: usado por
- *    BitacoraController para la vista de auditoría (solo lectura
- *    sobre este segundo grupo).
- *
- * Extiende Model directamente (no BaseModel): no necesita ni debe
- * exponer create()/update()/delete()/toggleStatus() genéricos sobre
- * esta tabla — registrar() ya es la única vía de escritura, y es
- * intencionalmente distinta a un create() genérico (nunca lanza,
- * siempre retorna bool).
- *
- * Tabla real (bitacora), según sidge.sql:
- *   id_bitacora   INT PK
- *   id_usuario    INT FK -> usuario.id_usuario
- *   fecha         DATE
- *   hora          TIME
- *   accion        VARCHAR(100)  -- texto libre (ej. 'LOGIN'), NO es un ENUM
- *   modulo        VARCHAR(50)
- *   direccion_ip  VARCHAR(45)
- *
- * usuario: id_usuario, id_persona, id_rol, nombre_usuario, ...
- * persona: id_persona, primer_nombre, primer_apellido, ...
+ * Bitácora del sistema: registrar() audita acciones (tolerante a fallos, solo deja error_log) y el resto es lectura para la vista de auditoría.
+ * Extiende Model y no BaseModel a propósito: registrar() es la única vía de escritura y no expone create/update/delete genéricos.
+ * Tabla bitacora: id_bitacora, id_usuario, fecha, hora, accion (texto libre, no ENUM), modulo, direccion_ip.
  */
 class BitacoraModel extends Model implements Listable
 {
@@ -47,9 +22,7 @@ class BitacoraModel extends Model implements Listable
     protected string $table = 'bitacora';
     protected string $primaryKey = 'id_bitacora';
 
-    // ------------------------------------------------------------------
     // Escritura: registrar una acción de auditoría
-    // ------------------------------------------------------------------
 
     public function registrar(int $idUsuario, string $accion, string $modulo, ?string $ip = null): bool
     {

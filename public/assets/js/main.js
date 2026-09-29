@@ -9,15 +9,17 @@ document.addEventListener('DOMContentLoaded', function () {
   initSubmitEnableOnValid();
   initPasswordRequirementsChecklist();
   initPasswordMatchValidation();
-  initClipboardCopy();
   initAutoFilters();
-  initSwalFromData();
+  SIGDEUI.mostrarFlash();
   initModalFocusFix();
 });
 
 function initAutoFilters() {
   document.querySelectorAll('form.data-panel__filters, form.auto-filters').forEach(function (form) {
-    var searchTimer;
+    // La entrada en el buscador espera a que el usuario deje de escribir.
+    var buscarConRetraso = SIGDEUI.esDebounced(350, function () {
+      applyFilters(1, false);
+    });
     var searchInput = form.querySelector('input[type="search"]');
     var activeAbortController = null;
     var panel = form.closest('.data-panel') || document.querySelector('.data-panel');
@@ -55,13 +57,13 @@ function initAutoFilters() {
         panel.classList.add('data-panel--loading');
       }
 
-      fetch(targetUrl, {
-        headers: { 'X-Requested-With': 'XMLHttpRequest' },
-        signal: activeAbortController.signal
+      SIGDEUI.enviar(targetUrl, {
+        signal: activeAbortController.signal,
+        texto: true
       })
-      .then(function (res) {
-        if (!res.ok) throw new Error('Error al cargar datos');
-        return res.text();
+      .then(function (r) {
+        if (!r.ok) throw new Error('Error al cargar datos');
+        return r.texto;
       })
       .then(function (html) {
         var parser = new DOMParser();
@@ -144,7 +146,6 @@ function initAutoFilters() {
     // Evitar recarga completa de página al presionar Enter en el formulario
     form.addEventListener('submit', function (e) {
       e.preventDefault();
-      clearTimeout(searchTimer);
       applyFilters(1, true);
     });
 
@@ -164,12 +165,7 @@ function initAutoFilters() {
 
     // Búsqueda con debounce sin perder foco ni recargar
     if (searchInput) {
-      searchInput.addEventListener('input', function () {
-        clearTimeout(searchTimer);
-        searchTimer = setTimeout(function () {
-          applyFilters(1, false);
-        }, 350);
-      });
+      searchInput.addEventListener('input', buscarConRetraso);
     }
 
     // Interceptar clics de paginación dentro del panel para que tampoco recarguen la página
@@ -207,40 +203,6 @@ function initAutoFilters() {
       });
       var page = currentUrl.searchParams.get('page') || 1;
       applyFilters(page, false, true);
-    });
-  });
-}
-
-function initClipboardCopy() {
-  document.querySelectorAll('[data-clipboard-text]').forEach(function (button) {
-    button.addEventListener('click', async function () {
-      var text = button.getAttribute('data-clipboard-text') || '';
-      if (!text) return;
-
-      try {
-        if (navigator.clipboard && window.isSecureContext) {
-          await navigator.clipboard.writeText(text);
-        } else {
-          var input = document.createElement('textarea');
-          input.value = text;
-          input.setAttribute('readonly', '');
-          input.style.position = 'fixed';
-          input.style.opacity = '0';
-          document.body.appendChild(input);
-          input.select();
-          document.execCommand('copy');
-          input.remove();
-        }
-
-        button.classList.add('is-copied');
-        button.innerHTML = '<i class="bi bi-check2"></i>';
-        setTimeout(function () {
-          button.classList.remove('is-copied');
-          button.innerHTML = '<i class="bi bi-clipboard"></i>';
-        }, 2000);
-      } catch (error) {
-        alert('No se pudo copiar el contenido.');
-      }
     });
   });
 }
@@ -370,28 +332,6 @@ function initPasswordMatchValidation() {
 
     input.addEventListener('input', validateMatch);
     target.addEventListener('input', validateMatch);
-  });
-}
-
-/**
- * Muestra una alerta SweetAlert2 con los datos que el backend dejó en el
- * DOM a través de un elemento oculto (ver partial de vista correspondiente).
- * Marcado esperado:
- * <div id="swal-data"
- *      data-icon="success|error|warning|info|question"
- *      data-title="..."
- *      data-text="...">
- * </div>
- */
-function initSwalFromData() {
-  var swalData = document.getElementById('swal-data');
-  if (!swalData) return;
-
-  Swal.fire({
-    icon: swalData.dataset.icon,
-    title: swalData.dataset.title,
-    text: swalData.dataset.text,
-    confirmButtonColor: '#0a1440'
   });
 }
 

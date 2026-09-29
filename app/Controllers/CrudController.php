@@ -12,36 +12,10 @@ use App\Traits\ListableIndexTrait;
 use Throwable;
 
 /**
- * CrudController
- *
- * Capa técnica de escritura: create/store/edit/update/delete/
- * toggleStatus, con las mismas garantías 405 de siempre cuando el
- * modelo no implementa la interfaz correspondiente.
- *
- * El listado paginado (index()) NO vive acá: vive en
- * ListableIndexTrait, compartido con ReadOnlyController. Listar y
- * escribir son capacidades independientes — un módulo puede necesitar
- * la primera sin la segunda (ver BitacoraController, que extiende
- * ReadOnlyController en vez de esta clase).
- *
- * Contrato con los modelos (por interfaz, verificado con instanceof):
- *  - store()        → Creatable::create()
- *  - update()       → Updatable::update()
- *  - delete()       → Deletable::delete()
- *  - toggleStatus() → Toggleable::toggleStatus()
- * Si el modelo no la implementa, la acción responde 405 en vez de fallar
- * con un error de método inexistente. Así un mismo controlador puede
- * exponer solo lo que su modelo realmente soporta.
- *
- * Contrato con los controladores hijos:
- *  - Sobrescribir extractData() y validate() si usan store() o update().
- *  - Definir $viewPath y $routeName (ver BaseController).
- *  - Si necesitan un comportamiento distinto, sobrescriben la acción
- *    completa (como hace CatalogoController con index(), edit() y update()).
- *
- * Convención de respuestas: las acciones de escritura responden JSON
- * (las consume el front con fetch); create() y edit() renderizan vistas.
- * Los errores inesperados se registran en log con jsonError() o handleError().
+ * Capa de escritura: create/store/edit/update/delete/toggleStatus. Cada acción
+ * exige la interfaz del modelo (Creatable, Updatable, Deletable, Toggleable) y
+ * responde 405 si falta. El listado vive en ListableIndexTrait; los hijos
+ * sobrescriben extractData() y validate(), y definen $viewPath y $routeName.
  *
  * @author Logística
  * @package App\Controllers
@@ -51,11 +25,8 @@ abstract class CrudController extends BaseController
     use ListableIndexTrait;
 
     /**
-     * Muestra el formulario de creación.
-     * Ruta: {controlador}/create (GET).
-     *
-     * Solo renderiza Views/{viewPath}/create.php. La creación real ocurre
-     * en store().
+     * Muestra el formulario de creación. Ruta: {controlador}/create (GET).
+     * Solo renderiza create.php; el alta real es store().
      */
     public function create(): void
     {
@@ -67,17 +38,9 @@ abstract class CrudController extends BaseController
     }
 
     /**
-     * Crea un registro nuevo.
-     * Ruta: {controlador}/store (POST, responde JSON).
-     *
-     * Flujo:
-     *  1. El modelo debe implementar Creatable, o respondo 405.
-     *  2. extractData() arma los datos a partir de $_POST.
-     *  3. Si los datos vienen vacíos, lo trato como error del hijo (olvidó
-     *     sobrescribir extractData()) y respondo 422.
-     *  4. validate() devuelve los errores por campo; si hay, respondo 422.
-     *  5. Guardo con create(); si el modelo lanza, jsonError() lo registra
-     *     y responde 500 genérico.
+     * Crea un registro. Ruta: {controlador}/store (POST, JSON).
+     * Responde 405 si el modelo no es Creatable, 422 por datos vacíos o
+     * errores de validación, 500 si el modelo lanza y 200 si todo sale bien.
      */
     public function store(): void
     {
@@ -89,8 +52,7 @@ abstract class CrudController extends BaseController
 
         $data = $this->extractData($_POST);
 
-        // Red de seguridad: si el hijo no sobrescribió extractData(), no se
-        // insertan registros vacíos en silencio.
+        // Si el hijo no sobrescribió extractData(), no se insertan registros vacíos.
         if ($data === []) {
             error_log(static::class . ': extractData() devolvió un arreglo vacío; ¿falta sobrescribirlo?');
             $this->jsonResponse(false, null, 'No se recibieron datos válidos para guardar.', 422);
@@ -112,12 +74,9 @@ abstract class CrudController extends BaseController
     }
 
     /**
-     * Muestra el formulario de edición de un registro.
-     * Ruta: {controlador}/edit/{id} (GET).
-     *
-     * Busca el registro con getById(). Si el id no es válido, el modelo no
-     * tiene ese método o no existe el registro, dejo un mensaje flash de
-     * error y redirijo al listado. La vista recibe el registro en $item.
+     * Muestra el formulario de edición. Ruta: {controlador}/edit/{id} (GET).
+     * Si el id no es válido o el registro no existe, deja un flash de error
+     * y vuelve al listado. La vista recibe el registro en $item.
      */
     public function edit(): void
     {
@@ -125,7 +84,7 @@ abstract class CrudController extends BaseController
             $id    = (int) ($_GET['id'] ?? 0);
             $model = $this->getModel();
 
-            // Verifica que exista el método en el modelo antes de invocarlo
+            // Verifica que el modelo tenga getById() antes de invocarlo.
             $item = ($id > 0 && method_exists($model, 'getById')) ? $model->getById($id) : null;
 
             if (!$item) {
@@ -140,17 +99,10 @@ abstract class CrudController extends BaseController
     }
 
     /**
-     * Actualiza un registro existente.
-     * Ruta: {controlador}/update (POST, responde JSON).
-     *
-     * Mismo flujo que store(), con dos diferencias: el modelo debe
-     * implementar Updatable y el ID llega en $_POST['id'] (400 si es
-     * inválido).
-     *
-     * Ojo: validate() se llama solo con $data, sin el ID. Si un hijo valida
-     * unicidad (nombre duplicado, cédula repetida), su propio registro se
-     * marcaría como duplicado; en ese caso el hijo debe sobrescribir update()
-     * y pasar el ID a su validate() (ver CatalogoController).
+     * Actualiza un registro. Ruta: {controlador}/update (POST, JSON).
+     * Mismo flujo que store(), con Updatable y el id en $_POST['id'] (400 si
+     * es inválido). validate() no recibe el id: si valida unicidad, el hijo
+     * debe sobrescribir update() (ver CatalogoController).
      */
     public function update(): void
     {
@@ -188,12 +140,9 @@ abstract class CrudController extends BaseController
     }
 
     /**
-     * Elimina un registro.
-     * Ruta: {controlador}/delete (POST, responde JSON).
-     *
-     * Requiere que el modelo implemente Deletable. Si el módulo prefiere
-     * desactivar en lugar de borrar, su modelo simplemente no implementa esa
-     * interfaz y se usa toggleStatus().
+     * Elimina un registro. Ruta: {controlador}/delete (POST, JSON).
+     * Requiere Deletable; si el módulo desactiva en vez de borrar, su
+     * modelo no la implementa y se usa toggleStatus().
      */
     public function delete(): void
     {
@@ -218,11 +167,9 @@ abstract class CrudController extends BaseController
     }
 
     /**
-     * Activa o desactiva un registro (ACTIVO/INACTIVO).
-     * Ruta: {controlador}/toggleStatus (POST, responde JSON).
-     *
-     * Requiere que el modelo implemente Toggleable. El cambio de estado lo
-     * decide el modelo: aquí solo valido y delego.
+     * Activa o desactiva un registro. Ruta: {controlador}/toggleStatus (POST, JSON).
+     * Requiere Toggleable; el cambio lo decide el modelo. Si devuelve false,
+     * responde ok = false y el front debe revisar el campo `ok`.
      */
     public function toggleStatus(): void
     {
@@ -237,26 +184,32 @@ abstract class CrudController extends BaseController
             $this->jsonResponse(false, null, 'ID inválido.', 400);
         }
 
+        $this->beforeToggleStatus($id);
+
         try {
-            $model->toggleStatus($id);
+            $ok = $model->toggleStatus($id);
         } catch (Throwable $e) {
             $this->jsonError($e, static::class);
         }
 
-        $this->jsonResponse(true, null, 'Estado actualizado correctamente.');
+        $this->jsonResponse($ok, null, $ok ? 'Estado actualizado correctamente.' : 'No se pudo actualizar el estado.');
+    }
+
+    /**
+     * Gancho previo al cambio de estado (por defecto no hace nada).
+     * Los hijos lo usan para bloquear la transición con jsonResponse(),
+     * que corta la ejecución antes de tocar el modelo.
+     */
+    protected function beforeToggleStatus(int $id): void
+    {
     }
 
     // Los hijos que usen store()/update() DEBEN sobrescribir estos dos ganchos.
 
     /**
-     * Gancho: extrae y normaliza del formulario los campos que se van a guardar.
-     *
-     * Devuelvo un arreglo vacío a propósito: store() y update() lo detectan y
-     * abortan con 422, así un hijo que olvide sobrescribirlo no inserta
-     * registros vacíos.
-     *
-     * @param array $source Normalmente $_POST.
-     * @return array Datos listos para validate() y para el modelo.
+     * Gancho: extrae y normaliza los campos a guardar (normalmente de $_POST).
+     * Devuelve [] a propósito: store() y update() lo detectan y abortan con
+     * 422, para que un hijo que lo olvide no inserte registros vacíos.
      */
     protected function extractData(array $source): array
     {
@@ -264,13 +217,10 @@ abstract class CrudController extends BaseController
     }
 
     /**
-     * Gancho: valida los datos extraídos.
+     * Gancho: valida los datos de extractData() y devuelve campo => mensaje.
+     * Por defecto no reporta errores; un arreglo vacío significa válido.
      *
-     * Por defecto no reporta errores. Los hijos lo sobrescriben y devuelven
-     * un arreglo campo => mensaje; si viene vacío, se considera válido.
-     *
-     * @param array $data Datos devueltos por extractData().
-     * @return array<string, string> Errores por campo.
+     * @return array<string, string>
      */
     protected function validate(array $data): array
     {

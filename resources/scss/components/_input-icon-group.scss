@@ -1,10 +1,11 @@
 // ==========================================================================
-// SIGDE - Componente: Input con icono integrado
+// SIGDE - Componente: Input con icono prefijo
 // Usado en auth, modales y cualquier formulario con iconos dentro del campo.
-// El color de fondo vive solo en el wrapper. El input, el select y el botón
-// del ojo son transparentes. Chrome/Edge pintan :-webkit-autofill sobre el
-// input (azul #e8f0fe) y eso deja los iconos de otro color: se cubre con
-// un box-shadow inset del mismo color que el wrapper.
+// El ícono va posicionado de forma absoluta dentro del wrapper (prefijo), no
+// como caja separada: el wrapper es UN solo campo con UN solo borde y NINGÚN
+// divisor interno. El input recibe padding-left para no pisar el ícono.
+// Chrome/Edge pintan :-webkit-autofill sobre el input (azul #e8f0fe) y eso
+// deja los iconos de otro color: se cubre con un box-shadow inset blanco.
 // ==========================================================================
 
 @mixin input-icon-autofill-fill($bg) {
@@ -24,14 +25,20 @@
   background-color: $input-bg;
   border-radius: $border-radius;
   border: 1px solid $input-border-color;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  box-shadow: $shadow-input;
+  transition: border-color 0.15s ease, background-color 0.15s ease,
+    box-shadow 0.15s ease;
 
-  > i {
+  >i {
+    position: absolute;
+    left: 0.9rem;
+    top: 50%;
+    transform: translateY(-50%);
     color: $input-placeholder-color;
-    padding-left: 0.9rem;
     font-size: 1rem;
-    flex-shrink: 0;
+    pointer-events: none;
     background-color: transparent;
+    flex-shrink: 0;
   }
 
   .form-control,
@@ -40,6 +47,7 @@
     background-image: none;
     border: none;
     box-shadow: none;
+    padding-left: 2.6rem;
 
     &:focus {
       background-color: transparent;
@@ -47,17 +55,25 @@
       box-shadow: none;
     }
 
+    // Oculta el ojo/limpiar nativo de Edge/IE: el toggle propio
+    // (.input-icon-group__toggle) es el único que debe verse.
+    &::-ms-reveal,
+    &::-ms-clear {
+      display: none;
+    }
+
     &:-webkit-autofill,
     &:-webkit-autofill:hover,
     &:-webkit-autofill:focus,
     &:-webkit-autofill:active {
-      @include input-icon-autofill-fill($input-bg);
+      @include input-icon-autofill-fill($surface);
     }
   }
 
   &:focus-within {
     border-color: $primary;
     background-color: $input-focus-bg;
+    box-shadow: 0 0 0 0.2rem $tint-active;
 
     .form-control,
     .form-select {
@@ -67,7 +83,7 @@
       &:-webkit-autofill:hover,
       &:-webkit-autofill:focus,
       &:-webkit-autofill:active {
-        @include input-icon-autofill-fill($input-focus-bg);
+        @include input-icon-autofill-fill($surface);
       }
     }
   }
@@ -82,7 +98,7 @@
   }
 }
 
-.was-validated .input-icon-group:has(.form-control:invalid) ~ .invalid-feedback {
+.was-validated .input-icon-group:has(.form-control:invalid)~.invalid-feedback {
   display: block;
 }
 
@@ -100,9 +116,4 @@
     outline: none;
     box-shadow: none;
   }
-}
-
-input[type='password']::-ms-reveal,
-input[type='password']::-ms-clear {
-  display: none;
 }

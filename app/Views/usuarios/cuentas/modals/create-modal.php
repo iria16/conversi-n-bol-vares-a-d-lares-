@@ -22,57 +22,67 @@ ob_start();
 ?>
 <form id="formCrearUsuario" novalidate>
 
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <p class="form-section__label mb-0">Datos del empleado</p>
-    <?php if ($hayEmpleadosDisponibles): ?>
-      <span class="status-badge status-badge--info">
-        <?= count($empleadosDisponibles) ?> disponible<?= count($empleadosDisponibles) === 1 ? '' : 's' ?>
-      </span>
-    <?php endif; ?>
-  </div>
-
-  <div class="mb-3">
-    <label class="label-sigde" for="nuEmpleado">Empleado</label>
-    <div class="input-icon-group">
-      <i class="bi bi-person" aria-hidden="true"></i>
-      <select class="form-select" id="nuEmpleado" name="empleado_id" required <?= $hayEmpleadosDisponibles ? '' : 'disabled' ?>>
-        <option value="">Seleccione un empleado</option>
-        <?php foreach ($empleadosDisponibles as $empleado): ?>
-          <option value="<?= (int) $empleado['id'] ?>"><?= htmlspecialchars($empleado['nombre']) ?></option>
-        <?php endforeach; ?>
-      </select>
+  <section class="wizard-summary__section">
+    <div class="wizard-summary__section-header">
+      <span class="wizard-summary__icon"><i class="bi bi-person-vcard" aria-hidden="true"></i></span>
+      <span class="wizard-summary__section-title">Datos del empleado</span>
+      <?php if ($hayEmpleadosDisponibles): ?>
+        <span class="status-badge status-badge--info">
+          <?= count($empleadosDisponibles) ?> disponible<?= count($empleadosDisponibles) === 1 ? '' : 's' ?>
+        </span>
+      <?php endif; ?>
     </div>
-    <?php if (!$hayEmpleadosDisponibles): ?>
-      <div class="form-text text-danger">No hay empleados disponibles: todos los empleados activos ya tienen una cuenta.</div>
-    <?php endif; ?>
-  </div>
-
-  <p class="form-section__label mt-4">Credenciales de acceso</p>
-  <div class="row g-3">
-    <div class="col-md-6">
-      <label class="label-sigde" for="nuUsuario">Usuario</label>
-      <div class="input-icon-group">
-        <i class="bi bi-person-badge" aria-hidden="true"></i>
-        <input type="text" class="form-control" id="nuUsuario" name="usuario" required minlength="3" maxlength="50"
-               pattern="[a-z0-9._]+" title="Solo letras minúsculas, números, puntos y guiones bajos" <?= $hayEmpleadosDisponibles ? '' : 'disabled' ?>>
-      </div>
-      <div class="form-text">Letras minúsculas, números, puntos y guiones bajos.</div>
-    </div>
-    <div class="col-md-6">
-      <label class="label-sigde" for="nuRol">Rol</label>
-      <div class="input-icon-group">
-        <i class="bi bi-shield-check" aria-hidden="true"></i>
-        <select class="form-select" id="nuRol" name="rol_id" required>
-          <option value="">Seleccione un rol</option>
-          <?php foreach ($roles as $rol): ?>
-            <option value="<?= (int) $rol['id'] ?>"><?= htmlspecialchars($rol['nombre']) ?></option>
-          <?php endforeach; ?>
-        </select>
+    <div class="wizard-summary__card">
+      <div class="mb-3">
+        <label class="label-sigde" for="nuEmpleado">Empleado</label>
+        <div class="input-icon-group">
+          <i class="bi bi-person" aria-hidden="true"></i>
+          <select class="form-select" id="nuEmpleado" name="empleado_id" required <?= $hayEmpleadosDisponibles ? '' : 'disabled' ?>>
+            <option value="">Seleccione un empleado</option>
+            <?php foreach ($empleadosDisponibles as $empleado): ?>
+              <option value="<?= (int) $empleado['id'] ?>"><?= htmlspecialchars($empleado['nombre']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <?php if (!$hayEmpleadosDisponibles): ?>
+          <div class="form-text text-danger">No hay empleados disponibles: todos los empleados activos ya tienen una cuenta.</div>
+        <?php endif; ?>
       </div>
     </div>
-  </div>
+  </section>
 
-  <div class="info-alert mt-4">
+  <section class="wizard-summary__section mt-2">
+    <div class="wizard-summary__section-header">
+      <span class="wizard-summary__icon"><i class="bi bi-person-gear" aria-hidden="true"></i></span>
+      <span class="wizard-summary__section-title">Credenciales de acceso</span>
+    </div>
+    <div class="wizard-summary__card">
+      <div class="row g-2">
+        <div class="col-md-6">
+          <label class="label-sigde" for="nuUsuario">Usuario</label>
+          <div class="input-icon-group">
+            <i class="bi bi-person-badge" aria-hidden="true"></i>
+            <input type="text" class="form-control" id="nuUsuario" name="usuario" required minlength="3" maxlength="50"
+                   pattern="[a-z0-9._]+" title="Solo letras minúsculas, números, puntos y guiones bajos" <?= $hayEmpleadosDisponibles ? '' : 'disabled' ?>>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <label class="label-sigde" for="nuRol">Rol</label>
+          <div class="input-icon-group">
+            <i class="bi bi-shield-check" aria-hidden="true"></i>
+            <select class="form-select" id="nuRol" name="rol_id" required>
+              <option value="">Seleccione un rol</option>
+              <?php foreach ($roles as $rol): ?>
+                <option value="<?= (int) $rol['id'] ?>"><?= htmlspecialchars($rol['nombre']) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="info-alert mt-3">
     <span class="info-alert__icon"><i class="bi bi-info-circle" aria-hidden="true"></i></span>
     <div>
       <p class="info-alert__title mb-0">Contraseña generada automáticamente</p>

@@ -17,15 +17,25 @@ ob_start();
 
 <hr class="text-body-tertiary">
 
-<div class="d-flex justify-content-between align-items-center bg-light rounded-3 p-3">
-  <div>
-    <span class="label-sigde d-block mb-1">Estado del trámite</span>
-    <span class="status-badge" id="detalleEstado" aria-live="polite">—</span>
+  <div class="row g-3">
+    <div class="col-12">
+      <div class="wizard-summary__label mb-1">Estado del trámite</div>
+      <span class="status-badge" id="detalleEstado" aria-live="polite">—</span>
+    </div>
+    <div class="col-sm-6">
+      <div class="wizard-summary__label mb-1">Solicitado el</div>
+      <div class="wizard-summary__value" id="detalleFecha" aria-live="polite">—</div>
+    </div>
+    <div class="col-sm-6">
+      <div class="wizard-summary__label mb-1">Cargo</div>
+      <div class="wizard-summary__value" id="detalleCargo" aria-live="polite">—</div>
+    </div>
+    <div class="col-12">
+      <div class="wizard-summary__label mb-1">Documento de identidad</div>
+      <div class="wizard-summary__value" id="detalleDocumento" aria-live="polite">—</div>
+    </div>
   </div>
-  <div class="text-end">
-    <span class="fw-semibold" id="detalleFecha" aria-live="polite">—</span>
-  </div>
-</div>
+
 
 <hr class="text-body-tertiary">
 
@@ -50,7 +60,8 @@ $modalFooter = ob_get_clean();
 
 $modalId       = 'modalDetalleSolicitud';
 $modalTitle    = 'Detalle de la Solicitud';
-$modalSubtitle = 'Información detallada de la atención de recuperación.';
+$modalSubtitle = 'Información detallada de la atención de recuperación';
+$modalSize     = 'lg';
 include __DIR__ . '/../../../components/modal.php';
 
 unset($modalBody, $modalFooter, $modalId, $modalTitle, $modalSubtitle);

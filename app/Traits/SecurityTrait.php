@@ -51,8 +51,16 @@ trait SecurityTrait
     }
 
     /*
-      Garantiza que la sesión esté iniciada y que el usuario esté autenticado.
-      Si no hay sesión, guarda la URL solicitada y redirige al login.
+        Garantiza que la sesión esté iniciada y que el usuario esté autenticado.
+        Si no hay sesión, redirige al login.
+
+        Antes guardaba aquí la URL solicitada (`redirect_after_login`) para
+        devolver al usuario a esa página después de entrar, que es lo que hacen
+        casi todas las aplicaciones. Ya no se guarda: al entrar SIEMPRE se va al
+        dashboard, porque si el cierre de sesión fue intencional, la pantalla de
+        entrada debe ser la misma siempre y no depender del último módulo en el
+        que se estaba. Ver AuthController::authenticate(), que es donde se
+        decide el destino.
      */
     public function verificarSesion(): void
     {
@@ -61,8 +69,6 @@ trait SecurityTrait
         }
 
         if (!isset($_SESSION['usuario_id'])) {
-            $_SESSION['redirect_after_login'] = $_SERVER['REQUEST_URI'] ?? '';
-
             $_SESSION['swal'] = [
                 'icon'  => 'warning',
                 'title' => 'Sesión requerida',

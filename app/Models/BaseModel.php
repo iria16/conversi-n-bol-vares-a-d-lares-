@@ -5,11 +5,22 @@ namespace App\Models;
 
 use PDO;
 
+/**
+ * Modelo base con el CRUD genérico sobre $table y $primaryKey.
+ * Los modelos hijos sobrescriben lo que necesiten (joins, estados propios, filtros).
+ */
 abstract class BaseModel extends Model
 {
+    /** Nombre de la tabla; cada hijo debe asignarlo. */
     protected string $table;
+
+    /** Columna de clave primaria (por defecto 'id'). */
     protected string $primaryKey = 'id';
 
+    /**
+     * Lista registros con filtros y paginación, del más reciente al más antiguo por clave primaria.
+     * Los filtros se arman con buildFilters().
+     */
     public function getAll(array $filters = [], int $page = 1, int $perPage = 10): array
     {
         [$where, $params] = $this->buildFilters($filters);
@@ -31,6 +42,9 @@ abstract class BaseModel extends Model
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Cuenta los registros que cumplen los filtros; sirve para calcular el total de páginas.
+     */
     public function countAll(array $filters = []): int
     {
         [$where, $params] = $this->buildFilters($filters);
@@ -44,6 +58,9 @@ abstract class BaseModel extends Model
         return (int) $stmt->fetchColumn();
     }
 
+    /**
+     * Busca un registro por su clave primaria; devuelve null si no existe.
+     */
     public function getById(int $id): ?array
     {
         $stmt = $this->pdo->prepare("SELECT * FROM {$this->table} WHERE {$this->primaryKey} = :id");
@@ -51,6 +68,10 @@ abstract class BaseModel extends Model
         return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     }
 
+    /**
+     * Inserta un registro; las claves de $data deben ser nombres de columna reales.
+     * Los nombres de columna van directo al SQL, así que nunca deben venir del usuario.
+     */
     public function create(array $data): bool
     {
         $cols = array_keys($data);
@@ -59,6 +80,10 @@ abstract class BaseModel extends Model
         return $this->pdo->prepare($sql)->execute($data);
     }
 
+    /**
+     * Actualiza las columnas indicadas en $data del registro con ese id.
+     * Igual que create(), las claves de $data van directo al SQL.
+     */
     public function update(int $id, array $data): bool
     {
         $sets = array_map(fn($c) => "$c = :$c", array_keys($data));
@@ -67,12 +92,19 @@ abstract class BaseModel extends Model
         return $this->pdo->prepare($sql)->execute($data);
     }
 
+    /**
+     * Elimina físicamente el registro con ese id.
+     */
     public function delete(int $id): bool
     {
         return $this->pdo->prepare("DELETE FROM {$this->table} WHERE {$this->primaryKey} = :id")
                          ->execute(['id' => $id]);
     }
 
+    /**
+     * Alterna $field entre 'ACTIVO' e 'INACTIVO'.
+     * Los modelos con otro conjunto de estados (como AcademicYearModel) lo sobrescriben.
+     */
     public function toggleStatus(int $id, string $field = 'estado'): bool
     {
         $sql = "UPDATE {$this->table} 
@@ -82,6 +114,10 @@ abstract class BaseModel extends Model
         return $this->pdo->prepare($sql)->execute(['id' => $id]);
     }
 
+    /**
+     * Convierte los filtros en condiciones WHERE y parámetros; ignora los vacíos.
+     * La clave 'search' busca con LIKE en searchableFields(); cualquier otra clave se compara por igualdad.
+     */
     protected function buildFilters(array $filters): array
     {
         $where = [];
@@ -111,6 +147,9 @@ abstract class BaseModel extends Model
         return [$where, $params];
     }
 
+    /**
+     * Columnas donde busca el filtro 'search'; los hijos las sobrescriben (vacío por defecto).
+     */
     protected function searchableFields(): array
     {
         return [];

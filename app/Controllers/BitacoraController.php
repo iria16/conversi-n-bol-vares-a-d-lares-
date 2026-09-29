@@ -9,19 +9,25 @@ use PDO;
 use Throwable;
 
 /**
- * Controlador de la Bitácora del Sistema (vista audit/index.php).
- *
- * Extiende ReadOnlyController: este módulo nunca escribe desde el
- * frontend, así que no hay create/store/edit/update/delete/
- * toggleStatus que redirigir ni rechazar — simplemente no existen en
- * la jerarquía. El listado paginado lo resuelve ListableIndexTrait vía
- * getFiltersFromRequest()/getExtraIndexData(); exportar() es el único
- * método propio del módulo.
+ * Bitácora del Sistema (vista audit/index.php), solo lectura.
+ * El listado lo resuelve ListableIndexTrait; exportar() es el único método propio.
  */
 class BitacoraController extends ReadOnlyController
 {
     protected string $viewPath  = 'auditoria';
     protected string $routeName = 'bitacora';
+
+    /**
+     * Modelo con su tipo real (BitacoraModel), para que el editor
+     * resuelva sus métodos en vez de verlos sobre `object`.
+     */
+    private function modelo(): BitacoraModel
+    {
+        /** @var BitacoraModel $model */
+        $model = $this->getModel();
+
+        return $model;
+    }
 
     protected function createModel(PDO $pdo): object
     {
@@ -29,9 +35,8 @@ class BitacoraController extends ReadOnlyController
     }
 
     /**
-     * Filtros propios del módulo: rango de fechas, acción exacta y
-     * texto libre (usuario/módulo/IP). Sobrescribe el genérico del
-     * trait, que solo maneja "search".
+     * Filtros del módulo: rango de fechas, acción exacta y texto libre
+     * (usuario, módulo, IP). Sustituye al genérico del trait.
      */
     protected function getFiltersFromRequest(): array
     {
@@ -44,13 +49,12 @@ class BitacoraController extends ReadOnlyController
     }
 
     /**
-     * Variables extra que necesita la vista de auditoría además de
-     * $items/$paginacion/$filters: stats, acciones disponibles para el
-     * filtro y el rango de fechas activo.
+     * Variables extra de la vista: registros, stats, acciones del filtro
+     * y rango de fechas activo.
      */
     protected function getExtraIndexData(array $items, array $filters): array
     {
-        $model = $this->getModel();
+        $model = $this->modelo();
 
         return [
             'registros'  => $items,
@@ -59,9 +63,8 @@ class BitacoraController extends ReadOnlyController
                 'alertas'          => $model->countAlertasSeguridad(),
                 'usuarios_activos' => $model->countUsuariosActivosHoy(),
             ],
-            // "accion" es texto libre en la BD (no ENUM), así que las
-            // opciones del filtro salen de los valores que existen
-            // hoy en la tabla, no de una lista fija en el código.
+            // "accion" es texto libre en la BD: las opciones salen de los
+            // valores existentes en la tabla, no de una lista fija.
             'acciones'   => $model->getAccionesDisponibles(),
             'fechaDesde' => $filters['desde'] ?? '',
             'fechaHasta' => $filters['hasta'] ?? '',
@@ -69,24 +72,21 @@ class BitacoraController extends ReadOnlyController
     }
 
     /**
-     * Exporta a CSV el listado completo (sin paginar) respetando
-     * los mismos filtros activos en pantalla. Es el destino del
-     * botón "Exportar" de la vista (bitacora/exportar). Renderiza
-     * un archivo, no HTML ni JSON, por eso no usa jsonResponse()
-     * ni jsonError(): en caso de fallo cae a handleError() como
-     * cualquier flujo de página completa.
+     * Exporta a CSV el listado completo (sin paginar) con los filtros activos.
+     * Ruta: bitacora/exportar. Entrega un archivo, no JSON, así que un
+     * fallo cae a handleError().
      */
     public function exportar(): void
     {
         try {
             $filters   = $this->getFiltersFromRequest();
-            $registros = $this->getModel()->getAllForExport($filters);
+            $registros = $this->modelo()->getAllForExport($filters);
 
             header('Content-Type: text/csv; charset=UTF-8');
             header('Content-Disposition: attachment; filename="bitacora_' . date('Y-m-d_His') . '.csv"');
 
             $out = fopen('php://output', 'w');
-            // BOM UTF-8 para que Excel no rompa los acentos al abrir el CSV.
+            // BOM UTF-8 para que Excel no rompa los acentos.
             fwrite($out, "\xEF\xBB\xBF");
             fputcsv($out, ['Fecha', 'Hora', 'Usuario', 'Usuario (login)', 'Acción', 'Módulo', 'IP']);
 

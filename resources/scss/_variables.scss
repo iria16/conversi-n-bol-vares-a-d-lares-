@@ -31,12 +31,30 @@ $border-radius-pill: 50rem;
 // ---------- Sombras ----------
 $box-shadow: 0 20px 60px rgba(10, 20, 64, 0.08);
 $box-shadow-sm: 0 4px 12px rgba(10, 20, 64, 0.06);
+$shadow-input: 0 1px 2px rgba($primary, 0.04);
+
+// ---------- Tintes y líneas del primario ----------
+$primary-tint:      rgba($primary, 0.06); // divisores finos y fondos muy suaves
+$tint-hover:        rgba($primary, 0.08); // fondos hover / íconos
+$tint-active:       rgba($primary, 0.1);  // fondos activos y aros de foco
+
+// ---------- Superficies ----------
+$surface:           #ffffff; // tarjetas, paneles y cajas blancas
+$surface-soft:      #f8f9fb; // cajas/inputs sobre tarjetas
+$border-color-soft: #e3e7f0; // borde de cajas suaves sobre tarjetas
+
+// ---------- Tarjetas ----------
+$card-padding:    1.25rem 1.35rem;
+$card-padding-lg: 1.5rem 1.65rem;
  
 // ---------- Formularios ----------
-$input-bg: #eef1f7;
-$input-border-color: transparent;
+// Inputs blancos para destacar sobre la superficie gris de las cajas.
+$input-bg: #ffffff;
+$input-border-color: rgba($primary, 0.18);
 $input-focus-border-color: $primary;
 $input-focus-bg: #ffffff;
+$input-box-shadow: $shadow-input;
+$form-select-box-shadow: $shadow-input;
 $input-placeholder-color: #b2b7c9;
 $input-padding-y: 0.7rem;
 $input-padding-x: 0.9rem;

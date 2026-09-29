@@ -13,21 +13,25 @@ ob_start();
   <!-- Campo oculto con el catálogo activo -->
   <input type="hidden" name="tipo" value="<?= htmlspecialchars($catalogoActivo) ?>">
 
-  <div class="mb-3">
-    <label for="nuevoElementoNombre" class="form-label">
-      Nombre <span class="text-danger">*</span>
-    </label>
-    <input
-      type="text"
-      id="nuevoElementoNombre"
-      name="nombre"
-      class="form-control"
-      required
-      maxlength="50"
-      autocomplete="off"
-    >
-    <div class="invalid-feedback">El nombre es obligatorio (máximo 100 caracteres).</div>
-  </div>
+  <section class="wizard-summary__section">
+    <div class="wizard-summary__card">
+      <div class="mb-3">
+        <label for="nuevoElementoNombre" class="form-label">
+          Nombre <span class="text-danger">*</span>
+        </label>
+        <input
+          type="text"
+          id="nuevoElementoNombre"
+          name="nombre"
+          class="form-control"
+          required
+          maxlength="50"
+          autocomplete="off"
+        >
+        <div class="invalid-feedback">El nombre es obligatorio (máximo 100 caracteres).</div>
+      </div>
+    </div>
+  </section>
 </form>
 <?php
 $modalBody = ob_get_clean();

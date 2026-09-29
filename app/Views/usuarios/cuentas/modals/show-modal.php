@@ -30,42 +30,50 @@ ob_start();
   <p class="text-support small mb-0 mt-2" id="verUsuarioDocumentoTop"></p>
 </div>
 
-<div class="row g-3 mb-3">
-  <div class="col-md-6">
-    <p class="form-section__label">Información personal</p>
+<div class="wizard-summary__row mb-3">
+  <section class="wizard-summary__section">
+    <div class="wizard-summary__section-header">
+      <span class="wizard-summary__icon"><i class="bi bi-person" aria-hidden="true"></i></span>
+      <span class="wizard-summary__section-title">Información personal</span>
+    </div>
+    <div class="wizard-summary__card">
+      <div class="wizard-summary__item mb-3">
+        <div class="wizard-summary__label">Empleado</div>
+        <div class="wizard-summary__value" id="verUsuarioEmpleado"></div>
+      </div>
+      <div class="wizard-summary__item">
+        <div class="wizard-summary__label">Cargo</div>
+        <div class="wizard-summary__value" id="verUsuarioCargo"></div>
+      </div>
+    </div>
+  </section>
 
-    <div class="mb-3">
-      <span class="label-sigde">Empleado</span>
-      <p class="mb-0" id="verUsuarioEmpleado"></p>
+  <section class="wizard-summary__section">
+    <div class="wizard-summary__section-header">
+      <span class="wizard-summary__icon"><i class="bi bi-person-gear" aria-hidden="true"></i></span>
+      <span class="wizard-summary__section-title">Información de cuenta</span>
     </div>
-    <div>
-      <span class="label-sigde">Cargo</span>
-      <p class="mb-0" id="verUsuarioCargo"></p>
+    <div class="wizard-summary__card">
+      <div class="wizard-summary__item mb-3">
+        <div class="wizard-summary__label">Usuario</div>
+        <div class="wizard-summary__value" id="verUsuarioUsuario"></div>
+      </div>
+      <div class="wizard-summary__item">
+        <div class="wizard-summary__label">Último acceso</div>
+        <div class="wizard-summary__value" id="verUsuarioUltimoAcceso"></div>
+      </div>
     </div>
-  </div>
-
-  <div class="col-md-6">
-    <p class="form-section__label">Información de cuenta</p>
-
-    <div class="mb-3">
-      <span class="label-sigde">Usuario</span>
-      <p class="mb-0" id="verUsuarioUsuario"></p>
-    </div>
-    <div>
-      <span class="label-sigde">Último acceso</span>
-      <p class="mb-0" id="verUsuarioUltimoAcceso"></p>
-    </div>
-  </div>
+  </section>
 </div>
 
-<div class="d-flex justify-content-between align-items-center bg-light rounded-3 p-3">
+<div class="wizard-summary__card d-flex justify-content-between align-items-center">
   <div>
-    <span class="label-sigde d-block mb-1">Estado</span>
+    <div class="wizard-summary__label mb-1">Estado</div>
     <span class="status-badge" id="verUsuarioEstado" aria-live="polite"></span>
   </div>
   <div class="text-end">
-    <span class="label-sigde d-block mb-1">Miembro desde</span>
-    <span class="fw-semibold small" id="verUsuarioMiembroDesde"></span>
+    <div class="wizard-summary__label mb-1">Miembro desde</div>
+    <div class="wizard-summary__value" id="verUsuarioMiembroDesde"></div>
   </div>
 </div>
 <?php
@@ -79,7 +87,8 @@ $modalFooter = ob_get_clean();
 
 $modalId       = 'modalVerUsuario';
 $modalTitle    = 'Detalle del usuario';
-$modalSubtitle = 'Vista detallada del perfil institucional.';
+$modalSubtitle = 'Vista detallada del perfil institucional';
+$modalSize     = 'lg';
 include __DIR__ . '/../../../components/modal.php';
 
 unset($modalBody, $modalFooter, $modalId, $modalTitle, $modalSubtitle);
