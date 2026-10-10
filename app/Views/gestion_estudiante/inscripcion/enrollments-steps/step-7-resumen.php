@@ -1,146 +1,185 @@
 <?php
 /**
- * Paso 7 - Resumen / confirmación.
- * Cada bloque trae un botón "Editar" que devuelve al paso correspondiente
- * (data-editar-paso), y los valores que rellena enrollments.js vía
- * data-resumen.
- */
+ * Paso 7 - Confirmación.
+ *
+ * Mismo armazón que el paso 6 del wizard de empleados (empleados/employee-steps/
+ * step-6-confirmacion.php): la identidad del estudiante arriba con su botón
+ * "Editar", y debajo las secciones declaradas en $filas. Cada fila se reparte
+ * sola en columnas (.wizard-summary__row) y cada sección lleva el "Editar" que
+ * la devuelve al paso donde se capturó.
+ *
+ * Las secciones van agrupadas por propósito, no por paso: "Procedencia" y
+ * "Académico" conviven en la primera fila porque son los dos bloques que se
+ * leen juntos, aunque las captura el paso 2 y el 3 respectivamente.
+ *
+ * Contrato con enrollments.js (llenarResumen):
+ * - `[data-resumen="campo"]` se rellena con textContent, así que el elemento
+ * no puede llevar markup alrededor (ver wizard-summary-field.php).
+ * - `#resumenAvatarPreview` / `#resumenAvatarIcon` la foto que se subió en el paso 1.
+ * - `#badgeFichaMedica` cambia entre registrada y sin registrada.
+ * - `#resumenDocsProgressBar`, `#resumenDocsProgreso`, `#resumenListaDocumentos` recaudos.
+ * - `#resumenFamiliares` lo inyecta el JS, una tarjeta por familiar.
+*/
+
+/* Cuerpos que no son un par etiqueta/valor. Se arman antes de declararlos en
+ $filas porque ahí solo caben datos, no markup.*/
+
+// Ficha médica: un estado, no un dato de texto. El id va en el badge y no en un
+// contenedor porque el JS le cambia clase y texto a ese elemento.
+ob_start();
 ?>
-
-<div class="wizard-summary__section">
-  <div class="wizard-summary__section-header">
-    <span class="wizard-summary__icon"><i class="bi bi-person-check" aria-hidden="true"></i></span>
-    <span class="wizard-summary__section-title">Confirmar registro</span>
+<div class="wizard-summary__item mt-3">
+  <div class="wizard-summary__label">Ficha médica</div>
+  <div class="wizard-summary__value">
+    <span class="status-badge status-badge--inactive" id="badgeFichaMedica">Sin ficha registrada</span>
   </div>
+</div>
+<?php
+$cuerpoFichaMedica = ob_get_clean();
 
-  <p class="text-support mb-0">
-    Revise la información antes de confirmar. Puede volver a cualquier paso para corregirla.
-  </p>
+// Recaudos: barra de avance + un <li> por fila del paso 5 (verde entregado,
+// rojo pendiente). El texto sale de la tabla del paso 5, no de este archivo.
+ob_start();
+?>
+<div class="d-flex align-items-center gap-2 mb-3">
+  <div class="progress flex-grow-1" style="height: 6px;">
+    <div class="progress-bar bg-warning" role="progressbar" style="width: 0"
+         aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" id="resumenDocsProgressBar"></div>
+  </div>
+  <span class="wizard-summary__label mb-0" id="resumenDocsProgreso">— de —</span>
+</div>
+<ul class="list-unstyled mb-0" id="resumenListaDocumentos"></ul>
+<?php
+$cuerpoRecaudos = ob_get_clean();
+
+// Familiares: lo inyecta entero el JS, una tarjeta por familiar.
+ob_start();
+?>
+<div id="resumenFamiliares">
+  <p class="text-support mb-0">Sin familiares registrados.</p>
+</div>
+<?php
+$cuerpoFamiliares = ob_get_clean();
+
+/* Cada fila es una lista de secciones; cada sección, sus campos.
+ 'campos' => [['Etiqueta', 'clave'], ...] para lo que pinta el JS, y 'cuerpo'
+ para lo que es markup. Las dos cosas pueden convivir en la misma sección.*/
+$filas = [
+    [
+        [
+            'titulo' => 'Ubicación académica',
+            'icono'  => 'mortarboard',
+            'paso'   => 3,
+            'campos' => [
+                ['Grado',         'grado'],
+                ['Sección',       'seccion'],
+                ['Turno',         'turno'],
+                ['Año escolar',   'anio_escolar'],
+            ],
+        ],
+        [
+            'titulo' => 'Procedencia',
+            'icono'  => 'buildings',
+            'paso'   => 2,
+            'campos' => [
+                ['Tipo de ingreso',               'tipo_ingreso'],
+                ['Institución anterior',          'institucion_anterior'],
+                ['Último grado cursado',          'ult_grado_cursado'],
+                ['Año escolar de procedencia',    'anio_escolar_procedencia'],
+            ],
+        ],
+    ],
+    [
+        [
+            'titulo' => 'Talla y salud',
+            'icono'  => 'rulers',
+            'paso'   => 4,
+            'campos' => [
+                ['Camisa',   'talla_camisa'],
+                ['Pantalón', 'talla_pantalon'],
+                ['Calzado',  'talla_zapato'],
+            ],
+            'cuerpo' => $cuerpoFichaMedica,
+        ],
+        [
+            'titulo' => 'Recaudos',
+            'icono'  => 'file-earmark-text',
+            'paso'   => 5,
+            'cuerpo' => $cuerpoRecaudos,
+        ],
+    ],
+];
+?>
+<div class="wizard-summary__section-header mb-2">
+  <span class="wizard-summary__icon"><i class="bi bi-clipboard-check" aria-hidden="true"></i></span>
+  <span class="wizard-summary__section-title">Confirmar inscripción</span>
+</div>
+<p class="text-support mb-3">Revisa que todo esté correcto antes de finalizar.</p>
+
+<?php /* La identidad lleva su propio "Editar" al paso 1, igual que en empleados:
+ los datos personales se leen primero y se corrigen primero. La foto es
+ la del paso 1, que el JS copia al entrar al resumen.*/ ?>
+<div class="wizard-summary__identity mb-3">
+  <span class="avatar avatar--xl avatar--primary">
+    <img id="resumenAvatarPreview" alt="" hidden>
+    <i class="bi bi-person" id="resumenAvatarIcon" aria-hidden="true"></i>
+  </span>
+  <div class="wizard-summary__identity-info">
+    <div class="wizard-summary__identity-name" data-resumen="nombre_completo">—</div>
+    <div class="wizard-summary__identity-doc" data-resumen="documento">—</div>
+    <div class="wizard-summary__grid mt-3">
+      <?php
+      $wsLabel = 'Fecha de nacimiento';
+      $wsField = 'fecha_nacimiento';
+      include __DIR__ . '/../../../components/wizard-summary-field.php';
+
+      $wsLabel = 'Sexo';
+      $wsField = 'sexo';
+      include __DIR__ . '/../../../components/wizard-summary-field.php';
+      ?>
+    </div>
+  </div>
+  <button type="button" class="wizard-summary__edit-btn" data-editar-paso="1">
+    <i class="bi bi-pencil" aria-hidden="true"></i> Editar
+  </button>
 </div>
 
-<section class="wizard-summary__section">
-  <div class="wizard-summary__section-header">
-    <span class="wizard-summary__icon"><i class="bi bi-person" aria-hidden="true"></i></span>
-    <span class="wizard-summary__section-title">Datos personales</span>
-    <button type="button" class="wizard-summary__edit-btn" data-editar-paso="1">
-      <i class="bi bi-pencil" aria-hidden="true"></i> Editar
-    </button>
-  </div>
-  <div class="wizard-summary__grid">
-    <div class="wizard-summary__item">
-      <div class="wizard-summary__label">Nombre completo</div>
-      <div class="wizard-summary__value" data-resumen="nombre_completo">—</div>
+<div class="wizard-summary">
+  <?php foreach ($filas as $fila): ?>
+    <div class="wizard-summary__row">
+      <?php foreach ($fila as $seccion): ?>
+        <?php
+        $wsCampos     = $seccion['campos'] ?? null;
+        $wsBody       = $seccion['cuerpo'] ?? '';
+        $wsTitulo     = $seccion['titulo'];
+        $wsIcono      = $seccion['icono'];
+        $wsEditarPaso = $seccion['paso'];
+        include __DIR__ . '/../../../components/wizard-summary-section.php';
+        ?>
+      <?php endforeach; ?>
     </div>
-    <div class="wizard-summary__item">
-      <div class="wizard-summary__label">Documento</div>
-      <div class="wizard-summary__value" data-resumen="documento">—</div>
-    </div>
-    <div class="wizard-summary__item">
-      <div class="wizard-summary__label">Fecha de nacimiento</div>
-      <div class="wizard-summary__value" data-resumen="fecha_nacimiento">—</div>
-    </div>
-    <div class="wizard-summary__item">
-      <div class="wizard-summary__label">Sexo</div>
-      <div class="wizard-summary__value" data-resumen="sexo">—</div>
-    </div>
-  </div>
-</section>
+  <?php endforeach; ?>
 
-<section class="wizard-summary__section">
-  <div class="wizard-summary__section-header">
-    <span class="wizard-summary__icon"><i class="bi bi-signpost-split" aria-hidden="true"></i></span>
-    <span class="wizard-summary__section-title">Procedencia</span>
-    <button type="button" class="wizard-summary__edit-btn" data-editar-paso="2">
-      <i class="bi bi-pencil" aria-hidden="true"></i> Editar
-    </button>
-  </div>
-  <div class="wizard-summary__grid">
-    <div class="wizard-summary__item">
-      <div class="wizard-summary__label">Tipo de ingreso</div>
-      <div class="wizard-summary__value" data-resumen="tipo_ingreso">—</div>
-    </div>
-    <div class="wizard-summary__item">
-      <div class="wizard-summary__label">Institución de procedencia</div>
-      <div class="wizard-summary__value" data-resumen="institucion_anterior">—</div>
-    </div>
-  </div>
-</section>
+  <?php /* Familiares fuera de las filas: el grid reparte el ancho y las
+ tarjetas de familiar necesitan la fila entera.*/ ?>
+  <?php
+  $wsCampos     = null;
+  $wsBody       = $cuerpoFamiliares;
+  $wsTitulo     = 'Familiares y representación';
+  $wsIcono      = 'people';
+  $wsEditarPaso = 6;
+  include __DIR__ . '/../../../components/wizard-summary-section.php';
+  ?>
 
-<section class="wizard-summary__section">
-  <div class="wizard-summary__section-header">
-    <span class="wizard-summary__icon"><i class="bi bi-mortarboard" aria-hidden="true"></i></span>
-    <span class="wizard-summary__section-title">Información académica</span>
-    <button type="button" class="wizard-summary__edit-btn" data-editar-paso="3">
-      <i class="bi bi-pencil" aria-hidden="true"></i> Editar
-    </button>
-  </div>
-  <div class="wizard-summary__grid">
-    <div class="wizard-summary__item">
-      <div class="wizard-summary__label">Grado</div>
-      <div class="wizard-summary__value" data-resumen="grado">—</div>
-    </div>
-    <div class="wizard-summary__item">
-      <div class="wizard-summary__label">Sección</div>
-      <div class="wizard-summary__value" data-resumen="seccion">—</div>
-    </div>
-    <div class="wizard-summary__item">
-      <div class="wizard-summary__label">Turno</div>
-      <div class="wizard-summary__value" data-resumen="turno">—</div>
-    </div>
-    <div class="wizard-summary__item">
-      <div class="wizard-summary__label">Año escolar</div>
-      <div class="wizard-summary__value" data-resumen="anio_escolar">—</div>
+  <div class="info-alert info-alert--warning">
+    <div class="info-alert__icon"><i class="bi bi-exclamation-circle" aria-hidden="true"></i></div>
+    <div>
+      <div class="info-alert__title">Verificación requerida</div>
+      <p class="info-alert__text">
+        Confirme que los datos están correctos antes de finalizar. Una vez registrada,
+        la inscripción no se edita desde aquí: para corregir algo hay que pedir la
+        anulación del registro.
+      </p>
     </div>
   </div>
-</section>
-
-<section class="wizard-summary__section">
-  <div class="wizard-summary__section-header">
-    <span class="wizard-summary__icon"><i class="bi bi-rulers" aria-hidden="true"></i></span>
-    <span class="wizard-summary__section-title">Talla uniforme y ficha médica</span>
-    <button type="button" class="wizard-summary__edit-btn" data-editar-paso="4">
-      <i class="bi bi-pencil" aria-hidden="true"></i> Editar
-    </button>
-  </div>
-  <div class="wizard-summary__card">
-    <div class="wizard-summary__grid">
-      <div class="wizard-summary__item">
-        <div class="wizard-summary__label">Camisa</div>
-        <div class="wizard-summary__value" data-resumen="talla_camisa">—</div>
-      </div>
-      <div class="wizard-summary__item">
-        <div class="wizard-summary__label">Pantalón</div>
-        <div class="wizard-summary__value" data-resumen="talla_pantalon">—</div>
-      </div>
-      <div class="wizard-summary__item">
-        <div class="wizard-summary__label">Calzado</div>
-        <div class="wizard-summary__value" data-resumen="talla_zapato">—</div>
-      </div>
-      <div class="wizard-summary__item">
-        <div class="wizard-summary__label">Tipo de sangre</div>
-        <div class="wizard-summary__value" data-resumen="tipo_sangre">—</div>
-      </div>
-      <div class="wizard-summary__item">
-        <div class="wizard-summary__label">Alergias</div>
-        <div class="wizard-summary__value" data-resumen="alergias">—</div>
-      </div>
-      <div class="wizard-summary__item">
-        <div class="wizard-summary__label">Enfermedades</div>
-        <div class="wizard-summary__value" data-resumen="enfermedades">—</div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="wizard-summary__section">
-  <div class="wizard-summary__section-header">
-    <span class="wizard-summary__icon"><i class="bi bi-people" aria-hidden="true"></i></span>
-    <span class="wizard-summary__section-title">Familiares y representante legal</span>
-    <button type="button" class="wizard-summary__edit-btn" data-editar-paso="6">
-      <i class="bi bi-pencil" aria-hidden="true"></i> Editar
-    </button>
-  </div>
-  <div id="resumenFamiliares">
-    <p class="text-support mb-0">Sin familiares registrados.</p>
-  </div>
-</section>
+</div>

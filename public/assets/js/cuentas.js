@@ -1,12 +1,12 @@
 /* ==========================================================================
-   SIGDE - cuentas.js
-   Comportamiento específico de la vista de Cuentas de Usuario:
-   toggle de estado, alta vía AJAX, modal Ver Detalle y modal Editar.
-   Depende de: Bootstrap 5 (modales), SweetAlert2 (opcional),
-   window.BASE_URL (definido globalmente en layouts/app.php).
-   Nota: store/update envían su token vía <form> con
-   components/csrf-field.php; toggleStatus no envía CSRF token.
-   ========================================================================== */
+ SIGDE - cuentas.js
+ Comportamiento específico de la vista de Cuentas de Usuario:
+ toggle de estado, alta vía AJAX, modal Ver Detalle y modal Editar.
+ Depende de: Bootstrap 5 (modales), SweetAlert2 (opcional),
+ window.BASE_URL (definido globalmente en layouts/app.php).
+ Nota: store/update envían su token vía <form> con
+ components/csrf-field.php; toggleStatus no envía CSRF token.
+ ==========================================================================*/
 
 document.addEventListener('DOMContentLoaded', function () {
   initToggleEstadoUsuario();
@@ -23,7 +23,7 @@ var rutaControlador = 'cuentaUsuario';
  * Activa/desactiva una cuenta de usuario desde el switch de la tabla,
  * con confirmación previa (SweetAlert2 si está disponible, si no
  * confirm() nativo) y actualización visual inmediata de la fila.
- */
+*/
 function initToggleEstadoUsuario() {
   document.addEventListener('change', async function (e) {
     var checkbox = e.target.closest('.toggle-estado-usuario');
@@ -118,14 +118,8 @@ function actualizarPorcentajesStats(activas, inactivas) {
   }
 }
 
-/* ── Validación en vivo (frontend) ──────────────────────────────────
-   Las reglas (required, minlength, maxlength, pattern) ya están
-   declaradas en el propio HTML de create-modal.php / edit-modal.php
-   — el JS NO las reimplementa (evita tener la misma regla en dos
-   lugares que puedan desincronizarse). Lo único que hace este bloque
-   es leer el estado de validez nativo (input.validity) y ponerle un
-   mensaje en español vía setCustomValidity(), coherente con los
-   mensajes que devuelve CuentaUsuarioController::validarNombreUsuario(). */
+/* Validación en vivo (frontend). El backend sigue siendo quien manda; esto solo evita que la
+ * persona llegue al envío con un dato que el servidor iba a rechazar.*/
 
 function aplicarValidacionNombreUsuario(input) {
   if (!input) return;
@@ -166,7 +160,7 @@ function aplicarValidacionSelectRequerido(select, mensaje) {
  * recarga la página completa, para que tabla, contadores y el <select>
  * de empleados disponibles los sirva siempre el servidor como única
  * fuente de verdad — sin duplicar el markup de la fila en JS.
- */
+*/
 function initCrearUsuarioForm() {
   var formCrear = document.getElementById('formCrearUsuario');
   if (!formCrear) return;
@@ -238,7 +232,7 @@ function initCrearUsuarioForm() {
  * cuentaUsuario/getDetalle en lugar de leerlos de data-* de la fila,
  * ya que el detalle incluye campos (documento, último acceso, miembro
  * desde) que la tabla no expone.
- */
+*/
 function initVerUsuarioModal() {
   var modalVerEl = document.getElementById('modalVerUsuario');
   if (!modalVerEl) return;
@@ -320,7 +314,7 @@ function formatearFecha(valor, soloFecha) {
 /**
  * Modal "Editar Usuario": rellena el formulario desde los data-* del
  * botón de la fila y envía los cambios vía AJAX a cuentaUsuario/update.
- */
+*/
 function initEditarUsuarioModal() {
   var modalEditarEl = document.getElementById('modalEditarUsuario');
   if (!modalEditarEl) return;
@@ -413,13 +407,13 @@ function initEditarUsuarioModal() {
   });
 }
 
-/* ── Utilidades ─────────────────────────────────────────────────── */
+/* ── Utilidades*/
 
 /**
  * Replica ucwords(mb_strtolower($str, 'UTF-8')) de PHP, usado en
  * index.php para el rol: pone en minúscula todo y luego mayúscula la
  * primera letra de cada palabra (ej. "SUPER ADMINISTRADOR" -> "Super Administrador").
- */
+*/
 function capitalizarPalabras(str) {
   if (!str) return '';
   return str

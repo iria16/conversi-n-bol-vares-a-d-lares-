@@ -2,7 +2,7 @@
 /**
  * Helpers de presentación compartidos por el layout interno.
  * Solo se cargan una vez (guard function_exists).
- */
+*/
 
 if (!function_exists('sigde_iniciales')) {
     function sigde_iniciales(string $nombre): string
@@ -19,9 +19,9 @@ if (!function_exists('sigde_iniciales')) {
 
 if (!function_exists('sigde_rol_clave')) {
     /**
-     * Clave canónica de rol usada en menú, dashboard y guards.
-     * La BD puede devolver "Administrador", "ADMIN", "admin", etc.
-     */
+ * Clave canónica de rol usada en menú, dashboard y guards.
+ * La BD puede devolver "Administrador", "ADMIN", "admin", etc.
+*/
     function sigde_rol_clave(string $rol): string
     {
         $rol = mb_strtolower(trim($rol), 'UTF-8');
@@ -54,10 +54,10 @@ if (!function_exists('sigde_rol_etiqueta')) {
 
 if (!function_exists('sigde_nav_sections')) {
     /**
-     * Menú lateral filtrado por rol.
-     *
-     * @return list<array{label:string,items:list<array{id:string,label:string,icon:string,href:string}>}>
-     */
+ * Menú lateral filtrado por rol.
+ *
+ * @return list<array{label:string,items:list<array{id:string,label:string,icon:string,href:string}>}>
+*/
     function sigde_nav_sections(string $rol): array
     {
         $rol = sigde_rol_clave($rol);
@@ -81,12 +81,12 @@ if (!function_exists('sigde_nav_sections')) {
             ],
             [
                 'label' => 'Gestión de estudiantes',
-                'roles' => ['secretaria'],
+                'roles' => ['secretaria', 'directivo'],
                 'items' => [
-                    ['id' => 'inscripcion',   'label' => 'Inscripción',   'icon' => 'bi-person-plus',      'href' => BASE_URL . 'inscripciones/index'],
-                    ['id' => 'ratificacion',  'label' => 'Ratificación',  'icon' => 'bi-arrow-repeat',     'href' => BASE_URL . 'ratificacion/index'],
-                    ['id' => 'retiro',        'label' => 'Retiro',        'icon' => 'bi-box-arrow-right',  'href' => BASE_URL . 'withdrawal/index'],
-                    ['id' => 'egreso',        'label' => 'Egreso',        'icon' => 'bi-mortarboard-fill', 'href' => BASE_URL . 'egresos/index'],
+                    ['id' => 'inscripcion',  'label' => 'Inscripción',  'icon' => 'bi-person-plus',     'href' => BASE_URL . 'inscripciones/index', 'roles' => ['secretaria']],
+                    ['id' => 'ratificacion', 'label' => 'Ratificación', 'icon' => 'bi-arrow-repeat',    'href' => BASE_URL . 'ratificacion/index',  'roles' => ['secretaria']],
+                    ['id' => 'retiro',       'label' => 'Retiro',       'icon' => 'bi-box-arrow-right', 'href' => BASE_URL . 'withdrawal/index',    'roles' => ['secretaria', 'directivo']],
+                    ['id' => 'egreso',       'label' => 'Egreso',       'icon' => 'bi-mortarboard-fill','href' => BASE_URL . 'egresos/index',       'roles' => ['secretaria']],
                 ],
             ],
             [
@@ -116,13 +116,6 @@ if (!function_exists('sigde_nav_sections')) {
                 'items' => [
                     ['id' => 'constancia-estudio',     'label' => 'Constancia de Estudio',     'icon' => 'bi-file-earmark-text',  'href' => '#'],
                     ['id' => 'constancia-inscripcion', 'label' => 'Constancia de Inscripción', 'icon' => 'bi-file-earmark-check', 'href' => '#'],
-                ],
-            ],
-            [
-                'label' => 'Notificaciones',
-                'roles' => ['directivo'],
-                'items' => [
-                    ['id' => 'retiro', 'label' => 'Retiros Pendientes', 'icon' => 'bi-person-dash', 'href' => BASE_URL . 'withdrawal/index'],
                 ],
             ],
             [

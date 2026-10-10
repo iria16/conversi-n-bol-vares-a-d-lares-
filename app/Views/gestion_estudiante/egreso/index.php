@@ -10,20 +10,20 @@
  * ($extraScripts), no en un <script> dentro de la vista.
  *
  * Espera del controlador:
- * - array $stats        ['total' => int, 'graduados' => int, 'pendientes' => int]
- * - array $candidatos   cada uno: ['id','nombre','cedula','iniciales','avatar_color',
- *                        'avatar_img' (opcional),'grado','seccion',
- *                        'estado' => 'graduado'|'pendiente']
- * - array $secciones    lista de secciones para el filtro
- * - array $filters      valores actuales de los filtros aplicados
- * - array $paginacion   ['desde','hasta','total','pagina_actual','total_paginas']
+ * - array $stats ['total' => int, 'graduados' => int, 'pendientes' => int]
+ * - array $candidatos cada uno: ['id','nombre','cedula','iniciales','avatar_color',
+ * 'avatar_img' (opcional),'grado','seccion',
+ * 'estado' => 'graduado'|'pendiente']
+ * - array $secciones lista de secciones para el filtro
+ * - array $filters valores actuales de los filtros aplicados
+ * - array $paginacion ['desde','hasta','total','pagina_actual','total_paginas']
  *
  * @var array $stats
  * @var array $candidatos
  * @var array $secciones
  * @var array $filters
  * @var array $paginacion
- */
+*/
 
 $pageTitle       = 'Graduación';
 $pageDescription = 'Gestione la culminación académica de los estudiantes y el registro de egresos por periodo lectivo.';
@@ -209,7 +209,9 @@ ob_start();
               <i class="bi bi-check-lg"></i>
             </button>
           <?php else: ?>
-            <form method="post" action="<?= BASE_URL ?>egresos/graduar/<?= $estudianteId ?>" class="d-inline">
+            <!-- CORRECCIÓN: Acción apunta a la ruta base y el ID se envía oculto -->
+            <form method="post" action="<?= BASE_URL ?>egresos/graduar" class="d-inline">
+              <input type="hidden" name="id" value="<?= $estudianteId ?>">
               <button type="submit" class="action-btn action-btn--toggle" title="Registrar egreso">
                 <i class="bi bi-check-lg"></i>
               </button>

@@ -4,37 +4,37 @@
  * Modal "Registrar Nueva Inscripción" — wizard de 7 pasos, armado sobre
  * components/modal.php igual que el wizard de empleados
  * (empleados/modals/employee-modal.php):
- *   - el stepper entra por $modalHeaderExtra (entre el header y el body)
- *   - el <form> vive en el body y los botones del footer lo referencian con
- *     form="..."
- *   - $modalSize 'lg' y $modalStatic true (no se cierra por error)
+ * - el stepper entra por $modalHeaderExtra (entre el header y el body)
+ * - el <form> vive en el body y los botones del footer lo referencian con
+ * form="..."
+ * - $modalSize 'lg' y $modalStatic true (no se cierra por error)
  *
  * Para agregar/quitar un paso basta con editar el arreglo $pasos: alimenta el
  * stepper y los paneles a la vez.
  *
  * Variables del controlador (getExtraIndexData):
- * $gradosModal                          array [ ['id'=>..,'nombre'=>..] ] grados sueltos,
- *                                        los del colegio anterior (paso 2)
- * $anioActivo                           array ['id'=>..,'nombre'=>..]
- * $academico                            array con los grados, secciones y turnos de las
- *                                        COMBINACIONES registradas en Estructura Académica
- *                                        para el año activo, con la disponibilidad de
- *                                        cada una (paso 3). Lo produce
- *                                        InscripcionesModel::opcionesPasoAcademico().
- * $tiposInstitucionEstudiante           array [ ['tipo'=>..,'nombre'=>..] ] solo
- *                                        preescolar/primaria
- */
+ * $gradosModal array [ ['id'=>..,'nombre'=>..] ] grados sueltos,
+ * los del colegio anterior (paso 2)
+ * $anioActivo array ['id'=>..,'nombre'=>..]
+ * $academico array con los grados, secciones y turnos de las
+ * COMBINACIONES registradas en Estructura Académica
+ * para el año activo, con la disponibilidad de
+ * cada una (paso 3). Lo produce
+ * InscripcionesModel::opcionesPasoAcademico().
+ * $tiposInstitucionEstudiante array [ ['tipo'=>..,'nombre'=>..] ] solo
+ * preescolar/primaria
+*/
 $gradosModal   = $gradosModal ?? [];
 $anioActivo    = $anioActivo ?? ['id' => '', 'nombre' => ''];
 
 $pasos = [
-    1 => ['label' => 'Personales',  'vista' => 'step-1-personales'],
-    2 => ['label' => 'Procedencia', 'vista' => 'step-2-procedencia'],
-    3 => ['label' => 'Académico',   'vista' => 'step-3-academico'],
-    4 => ['label' => 'Adicional',   'vista' => 'step-4-adicional'],
-    5 => ['label' => 'Recaudos',    'vista' => 'step-5-recaudos'],
-    6 => ['label' => 'Familiares',  'vista' => 'step-6-familiares'],
-    7 => ['label' => 'Resumen',     'vista' => 'step-7-resumen'],
+1 => ['label' => 'Personales',    'vista' => 'step-1-personales'],
+2 => ['label' => 'Procedencia',   'vista' => 'step-2-procedencia'],
+3 => ['label' => 'Académico',     'vista' => 'step-3-academico'],
+4 => ['label' => 'Adicional',     'vista' => 'step-4-adicional'],
+5 => ['label' => 'Recaudos',      'vista' => 'step-5-recaudos'],
+6 => ['label' => 'Familiares',    'vista' => 'step-6-familiares'],
+7 => ['label' => 'Confirmación',  'vista' => 'step-7-resumen'],
 ];
 
 // ---------- Stepper ----------

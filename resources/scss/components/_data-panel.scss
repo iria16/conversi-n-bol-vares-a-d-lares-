@@ -62,6 +62,7 @@
   flex: 0 0 auto;   // anula el flex-basis:auto heredado de width:100%
   width: auto;      // anula el width:100% de Bootstrap
   min-width: 160px;
+  height: 42px;
   font-size: 0.85rem;
 
   @include media-breakpoint-down(sm) {
@@ -70,7 +71,70 @@
   }
 }
 
+.data-panel__active-year {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+  width: 160px;
+  height: 42px;
+  padding: 0 0.75rem;
+  border: 1px solid $input-border-color;
+  border-radius: $border-radius;
+  background: $input-bg;
+  color: $secondary;
+  font-size: 0.85rem;
+  white-space: nowrap;
+
+  @include media-breakpoint-down(sm) {
+    flex: 1 1 100%;
+  }
+
+  strong {
+    color: $dark;
+    font-weight: 700;
+  }
+
+  i {
+    color: $secondary;
+    font-size: 0.9rem;
+  }
+}
+
+.data-panel__year-filter {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 0 160px;
+  width: 160px;
+  height: 42px;
+
+  > i {
+    position: absolute;
+    left: 0.75rem;
+    color: $secondary;
+    font-size: 0.9rem;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .form-select {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    padding-left: 2rem;
+    font-size: 0.85rem;
+  }
+
+  @include media-breakpoint-down(sm) {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+
 .data-panel__search .form-control {
+  height: 42px;
   padding-left: 2.35rem;
   font-size: 0.85rem;
 }
@@ -197,6 +261,36 @@
   &--danger:hover,
   &--danger:focus {
     color: $danger;
+    background: rgba($danger, 0.08);
+  }
+
+  /* ── Familiares: papelera de desvincular ────────────────────────────────
+     Un mismo botón que alterna entre papelera y flecha de deshacer según el
+     estado de la fila, para que la fila no cambie de ancho al marcar.
+
+     `--locked` es el caso raro pero importante: el botón NO se puede usar y aun
+     así tiene que explicar por qué. Por eso el JS lo marca con aria-disabled y
+     no con el atributo disabled — el bloque de `&:disabled` de abajo pone
+     pointer-events:none, y un botón deshabilitado tampoco dispara click, así que
+     con disabled el clic se perdería en silencio y la secretaria no tendría forma
+     de aprender por qué ese familiar no se quita. Con aria-disabled se ve igual
+     de apagado, pero el clic llega. */
+  &--undo:hover,
+  &--undo:focus {
+    color: $primary;
+    background: $tint-hover;
+  }
+
+  &--locked {
+    opacity: 0.35;
+    color: $text-muted;
+    cursor: help;
+  }
+
+  &--locked:hover,
+  &--locked:focus {
+    opacity: 0.85;
+    color: $text-muted;
     background: rgba($danger, 0.08);
   }
 

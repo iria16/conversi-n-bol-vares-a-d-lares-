@@ -1,11 +1,11 @@
 <?php
-$pageTitle = 'Retiros Pendientes';
+$pageTitle = 'Retiro';
 $pageDescription = 'Gestión y procesamiento de solicitudes de retiro escolar.';
 $currentNav = 'retiro';
 $extraScripts = ['/js/withdrawals.js'];
 $breadcrumbs = [
-    ['label' => 'Retiros', 'href' => null],
-    ['label' => 'Retiros pendientes', 'href' => null],
+    ['label' => 'Gestión de estudiantes', 'href' => null],
+    ['label' => 'Retiro', 'href' => null],
 ];
 $stats = $stats ?? ['pendientes' => 0, 'aprobados' => 0, 'rechazados' => 0];
 $solicitudes = $solicitudes ?? [];
@@ -15,7 +15,6 @@ $motivos = $motivos ?? [];
 // retiros y el directivo los aprueba/rechaza.
 $puedeRegistrar = $puedeRegistrar ?? false;
 $puedeResolver = $puedeResolver ?? false;
-$estudiantesDisponibles = $estudiantesDisponibles ?? [];
 $paginacion = $paginacion ?? [
     'desde' => 0, 'hasta' => 0, 'total' => 0, 'pagina_actual' => 1, 'total_paginas' => 1,
 ];
@@ -33,7 +32,7 @@ ob_start();
   <?php
   endif;
   $pageHeaderActions = ob_get_clean();
-  $pageHeading    = 'Retiros Pendientes';
+  $pageHeading    = 'Retiros Escolares';
   $pageSubheading = $pageDescription;
   include __DIR__ . '/../../components/page-header.php';
 ?>
@@ -66,16 +65,6 @@ ob_start();
 
   ob_start();
   ?>
-  <label for="filtroMotivo" class="visually-hidden">Motivo</label>
-  <select id="filtroMotivo" name="motivo" class="form-select" aria-label="Filtrar por motivo">
-    <option value="">Motivo (Todos)</option>
-    <?php foreach ($motivos as $motivo): ?>
-      <option value="<?= (int) $motivo['id'] ?>" <?= (string) ($_GET['motivo'] ?? '') === (string) $motivo['id'] ? 'selected' : '' ?>>
-        <?= htmlspecialchars($motivo['nombre']) ?>
-      </option>
-    <?php endforeach; ?>
-  </select>
-
   <label for="filtroEstado" class="visually-hidden">Estado</label>
   <select id="filtroEstado" name="estado" class="form-select" aria-label="Filtrar por estado">
     <option value="">Estado (Todos)</option>
@@ -87,19 +76,18 @@ ob_start();
   $panelFilters           = ob_get_clean();
   $panelSearchName        = 'q';
   $panelSearchValue       = $_GET['q'] ?? '';
-  $panelSearchPlaceholder = 'Buscar por nombre, cédula o motivo...';
+  $panelSearchPlaceholder = 'Buscar por nombre o cédula...';
 
   // ---------- Data panel: colgroup ----------
-  // Anchos fijos: Estudiante / Grado-Sección / Fecha / Motivo / Estado / Acciones.
+  // Anchos fijos: Estudiante / Grado-Sección / Fecha / Estado / Acciones.
   ob_start();
   ?>
   <colgroup>
-    <col style="width: 22%;">
-    <col style="width: 16%;">
-    <col style="width: 14%;">
-    <col style="width: 22%;">
-    <col style="width: 14%;">
-    <col style="width: 12%;">
+    <col style="width: 28%;">
+    <col style="width: 20%;">
+    <col style="width: 18%;">
+    <col style="width: 17%;">
+    <col style="width: 17%;">
   </colgroup>
   <?php
   $panelColgroup = ob_get_clean();
@@ -111,7 +99,6 @@ ob_start();
     <th scope="col">Estudiante</th>
     <th scope="col">Grado/Sección</th>
     <th scope="col">Fecha solicitud</th>
-    <th scope="col">Motivo</th>
     <th scope="col">Estado</th>
     <th scope="col" class="text-center">Acciones</th>
   </tr>
@@ -126,7 +113,6 @@ ob_start();
     $grado          = $item['grado'] ?? '';
     $seccion        = $item['seccion'] ?? '';
     $fechaSolicitud = $item['fecha_solicitud'] ?? '';
-    $motivo         = $item['motivo'] ?? '';
     $observaciones  = $item['observaciones'] ?? '';
     $estado         = $item['estado'] ?? 'pendiente';
     $iniciales      = $item['iniciales'] ?? '';
@@ -157,9 +143,6 @@ ob_start();
         <span class="text-support">Sección <?= htmlspecialchars($seccion) ?></span>
       </td>
       <td><?= htmlspecialchars($fechaSolicitud) ?></td>
-      <td class="text-support text-truncate" style="max-width: 220px;" title="<?= htmlspecialchars($motivo) ?>">
-        <?= htmlspecialchars($motivo) ?>
-      </td>
       <td>
         <?php
           $badgeLabel  = ucfirst($estado);
@@ -172,13 +155,6 @@ ob_start();
           <button type="button"
             class="action-btn action-btn--view ver-retiro"
             data-id="<?= (int) $item['id'] ?>"
-            data-estudiante="<?= htmlspecialchars($estudiante) ?>"
-            data-cedula="<?= htmlspecialchars($cedula) ?>"
-            data-grado="<?= htmlspecialchars($grado . ' - Sección ' . $seccion) ?>"
-            data-fecha="<?= htmlspecialchars($fechaSolicitud) ?>"
-            data-motivo="<?= htmlspecialchars($motivo) ?>"
-            data-observaciones="<?= htmlspecialchars($observaciones) ?>"
-            data-estado="<?= htmlspecialchars($estado) ?>"
             title="Ver solicitud">
             <i class="bi bi-eye"></i>
           </button>
@@ -196,7 +172,7 @@ ob_start();
   <?php endforeach; ?>
   <?php if (!$solicitudes): ?>
     <tr>
-      <td colspan="6" class="text-center text-support py-4">
+      <td colspan="5" class="text-center text-support py-4">
         No se encontraron solicitudes de retiro.
       </td>
     </tr>
@@ -212,10 +188,10 @@ ob_start();
   ];
 
   include __DIR__ . '/../../components/data-panel.php';
-?>
+  ?>
 
-<?php
-$pageContent = ob_get_clean();
+  <?php
+  $pageContent = ob_get_clean();
 
 // ---------- Modales ----------
 // Se capturan aparte de $pageContent: layouts/app.php los imprime bajo <body>,
@@ -224,30 +200,46 @@ ob_start();
 
   // ---------- Modal: registrar retiro (solo secretaria) ----------
   if ($puedeRegistrar):
-      $hayEstudiantes = !empty($estudiantesDisponibles);
-      $hayMotivos      = !empty($motivos);
+      $hayMotivos = !empty($motivos);
   ob_start();
   ?>
   <form id="formRegistrarRetiro" novalidate>
+    <!-- La matrícula viaja oculta: la secretaria no escribe un id, elige de la lista. -->
+    <input type="hidden" id="retiroIdMatricula" name="id_matricula" value="">
+
     <div class="mb-3">
-      <label for="retiroEstudiante" class="label-sigde">Estudiante</label>
+      <label for="retiroBuscarEstudiante" class="label-sigde">Cédula del estudiante</label>
       <div class="input-icon-group">
         <i class="bi bi-person-vcard" aria-hidden="true"></i>
-        <select class="form-select" id="retiroEstudiante" name="id_matricula" required <?= $hayEstudiantes ? '' : 'disabled' ?>>
-          <option value="" selected disabled>Seleccionar estudiante</option>
-          <?php foreach ($estudiantesDisponibles as $candidato): ?>
-            <option value="<?= (int) $candidato['id_matricula'] ?>">
-              <?= htmlspecialchars($candidato['nombre'] . ' · ' . $candidato['cedula'] . ' · ' . $candidato['grado'] . ' "'
-                  . $candidato['seccion'] . '"') ?>
-            </option>
-          <?php endforeach; ?>
-        </select>
+        <input type="search" class="form-control" id="retiroBuscarEstudiante"
+               name="q" placeholder="Ej: 11625863"
+               autocomplete="off">
       </div>
-      <?php if (!$hayEstudiantes): ?>
-        <div class="form-text text-danger">No hay estudiantes disponibles para registrar retiro.</div>
-      <?php else: ?>
-        <div class="invalid-feedback">Seleccione el estudiante.</div>
-      <?php endif; ?>
+      <div class="invalid-feedback" id="retiroBuscarFeedback">Busque y seleccione un estudiante.</div>
+    </div>
+
+    <!-- Lista de coincidencias: la arma el JS con lo que devuelve buscarEstudiante. -->
+    <div id="retiroResultados" class="mb-3 d-none"></div>
+
+    <!-- Datos del estudiante ya localizado: son los que se revisan antes de confirmar. -->
+    <div id="retiroEstudianteDatos" class="mb-3 d-none">
+      <div class="detail-section__label"><i class="bi bi-person-vcard"></i>Estudiante seleccionado</div>
+      <div class="detail-list__item">
+        <div class="label-sigde">Nombre</div>
+        <div class="detail-list__value" id="retiroDatosNombre">—</div>
+      </div>
+      <div class="detail-list__item">
+        <div class="label-sigde">Documento</div>
+        <div class="detail-list__value" id="retiroDatosCedula">—</div>
+      </div>
+      <div class="detail-list__item">
+        <div class="label-sigde">Grado y sección</div>
+        <div class="detail-list__value" id="retiroDatosGrado">—</div>
+      </div>
+      <div class="detail-list__item">
+        <div class="label-sigde">Año escolar</div>
+        <div class="detail-list__value" id="retiroDatosAnio">—</div>
+      </div>
     </div>
 
     <div class="mb-3">
@@ -291,7 +283,7 @@ ob_start();
   ?>
   <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
   <button type="submit" form="formRegistrarRetiro" id="btnRegistrarRetiro" class="btn btn-primary"
-          <?= ($hayEstudiantes && $hayMotivos) ? '' : 'disabled' ?>>
+          <?= $hayMotivos ? '' : 'disabled' ?>>
     <i class="bi bi-box-arrow-right me-1" aria-hidden="true"></i> Registrar retiro
   </button>
   <?php
@@ -299,9 +291,9 @@ ob_start();
 
       $modalId       = 'registrarRetiroModal';
       $modalTitle    = 'Registrar Retiro';
-      $modalSubtitle = 'La solicitud quedará pendiente hasta que el directivo la apruebe o rechace.';
+      $modalSubtitle = 'Busque al estudiante, revise sus datos y luego indique el motivo.';
       include __DIR__ . '/../../components/modal.php';
-      unset($modalBody, $modalFooter, $modalId, $modalTitle, $modalSubtitle, $hayEstudiantes, $hayMotivos);
+      unset($modalBody, $modalFooter, $modalId, $modalTitle, $modalSubtitle, $hayMotivos);
   endif;
 
   // ---------- Modal: detalle de la solicitud ----------
@@ -310,43 +302,15 @@ ob_start();
   $modalSubtitle = 'Información de la solicitud seleccionada.';
   ob_start();
   ?>
-<div class="user-detail__header">
-  <?php
-    $avatarInitials = 'E';
-    $avatarSize     = 'xl';
-    $avatarTone     = 'primary';
-    $avatarSrc      = '';
-    $avatarAlt      = '';
-    include __DIR__ . '/../../components/avatar.php';
-  ?>
-  <div class="user-detail__name" id="retiroDetalleNombre">—</div>
-  <div class="user-detail__meta">
-    <span id="retiroDetalleCedula">—</span>
-    <span class="user-detail__meta-sep">•</span>
-    <span id="retiroDetalleEstado">Pendiente</span>
-  </div>
-</div>
-<div class="row g-4">
-  <div class="col-md-6">
-    <div class="detail-section__label"><i class="bi bi-person"></i>Estudiante</div>
-    <div class="detail-list__item">
-      <div class="label-sigde">Grado y sección</div>
-      <div class="detail-list__value" id="retiroDetalleGrado">—</div>
-    </div>
-    <div class="detail-list__item">
-      <div class="label-sigde">Fecha de solicitud</div>
-      <div class="detail-list__value" id="retiroDetalleFecha">—</div>
-    </div>
-  </div>
-  <div class="col-md-6">
-    <div class="detail-section__label"><i class="bi bi-file-text"></i>Motivo</div>
-    <div class="detail-list__item">
-      <div class="detail-list__value" id="retiroDetalleMotivo">—</div>
-    </div>
-    <div class="detail-list__item">
-      <div class="label-sigde">Observaciones</div>
-      <div class="detail-list__value" id="retiroDetalleObservaciones">—</div>
-    </div>
+<?php /* El cuerpo del modal lo arma el servidor (retiro/ver.php) y el JS lo vuelca
+ dentro de #retiroDetalleCuerpo. Antes estos campos vivían en el markup con un
+ id cada uno y los llenaba el navegador leyendo atributos data- del botón, que
+ ya no lleva: quedaban todos en "—". Al pedirlo al servidor, el modal y la
+ fila del listado no pueden mostrar dos versiones del mismo dato.*/ ?>
+<div id="retiroDetalleCuerpo">
+  <div class="text-center text-support py-4">
+    <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+    Cargando...
   </div>
 </div>
 <?php

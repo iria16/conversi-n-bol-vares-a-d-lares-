@@ -1,11 +1,6 @@
-/* ==========================================================================
-   SIGDE - empleado.js
-   Comportamiento específico de la vista de Gestión de Empleados:
-   toggle de estado, alta vía AJAX (wizard de registro) y modal Ver Detalle
-   y modal Editar.
-   Depende de: Bootstrap 5 (modales), SweetAlert2 (opcional),
-   window.BASE_URL (definido globalmente en layouts/app.php).
-   ========================================================================== */
+/* Comportamiento específico de la vista de Gestión de Empleados: toggle de estado, alta vía AJAX
+ * (wizard de registro) y los modales Ver Detalle y Editar. Depende de Bootstrap 5, SIGDEUI y
+ * wizard-ui.*/
 
 // --- Inicialización Módulo ---
 function initEmpleadoModule() {
@@ -59,10 +54,10 @@ function cargarEmpleado(id) {
 }
 
 /* ---------- Cascada estado -> municipio -> parroquia ----------
-   La lógica vive en SIGDEWizardUI.initCascadaUbicacion(), compartida con el
-   wizard de inscripciones: mismo endpoint, mismos textos y mismo
-   comportamiento. Acá solo se le pasa la URL de este módulo y se conserva el
-   handle, que usan el modal de edición y el wizard de alta. */
+ La lógica vive en SIGDEWizardUI.initCascadaUbicacion(), compartida con el
+ wizard de inscripciones: mismo endpoint, mismos textos y mismo
+ comportamiento. Acá solo se le pasa la URL de este módulo y se conserva el
+ handle, que usan el modal de edición y el wizard de alta.*/
 function iniciarCascadaUbicacion() {
   return SIGDEWizardUI.initCascadaUbicacion({
     url: baseUrl + rutaControlador + '/getUbicacion',
@@ -186,7 +181,11 @@ function pintarDetalleEmpleado(modalEl, d) {
   var valores = {
     nombre_completo:  d.nombre_completo,
     cedula:           d.tipo_documento + '-' + d.numero_documento,
+    /* Vacía y no un texto de relleno: la ficha ya pone "—" cuando no hay valor, y
+       escribir "Sin nacionalidad" en cada ficha vieja sería ruido. */
+    nacionalidad:     d.nacionalidad || '',
     cargo:            d.cargo || 'Sin cargo',
+    turno:            d.turno || 'Sin turno',
     estado:           activo ? 'Activo' : 'Inactivo',
     sexo:             { F: 'Femenino', M: 'Masculino' }[d.sexo] || d.sexo,
     fecha_nacimiento: formatearFecha(d.fecha_nacimiento),
@@ -300,16 +299,16 @@ function initEditarEmpleadoModal() {
   // y el de inscripciones, pero sobre los selects del formulario de edición.
   var cascadaEdicion = SIGDEWizardUI.initCascadaUbicacion({
     url: baseUrl + rutaControlador + '/getUbicacion',
-    estadoId: 'editDireccionEstado',
-    municipioId: 'editDireccionMunicipio',
-    parroquiaId: 'editDireccionParroquia'
+    estadoId: 'editEmpleado__Estado',
+    municipioId: 'editEmpleado__Municipio',
+    parroquiaId: 'editEmpleado__Parroquia'
   });
 
   /* Puebla la cascada con la dirección que ya tiene el empleado. Los tres
-     select vienen habilitados y con sus listas completas (ver
-     initCascadaUbicacion), así que solo hace falta elegir los tres valores; si
-     alguno ya no está en el catálogo, elegirParroquia devuelve false y quien
-     guarda lo ve en el resumen. */
+ select vienen habilitados y con sus listas completas (ver
+ initCascadaUbicacion), así que solo hace falta elegir los tres valores; si
+ alguno ya no está en el catálogo, elegirParroquia devuelve false y quien
+ guarda lo ve en el resumen.*/
   function poblarUbicacionEdicion(d) {
     if (!d) return;
     cascadaEdicion.elegirParroquia(
@@ -322,13 +321,97 @@ function initEditarEmpleadoModal() {
   // --- Tipo de documento: solo la letra cuando el select está cerrado ---
   // El comportamiento vive en wizard-ui.js, compartido con el wizard de
   // empleado y el de inscripción.
-  SIGDEWizardUI.initTipoDocumentoLetra({ selectId: 'editEmpleado__tipoDocumento' });
+  SIGDEWizardUI.initTipoDocumentoLetra({ selectId: 'editEmpleado__TipoDocumento' });
 
   // --- Formación académica: el grado académico filtra los títulos ---
   // El grado académico filtra los títulos (data-id-grado del servidor), igual
   // que en el wizard; el filtrado vive en SIGDEUI.filtrarOpciones().
   var selGradoEd  = formEditar.elements.id_grado_academico;
   var selTituloEd = formEditar.elements.id_titulo;
+
+  /* Pinta la formación que ya tiene el empleado dentro del modal. Antes los <select> de título,
+ grado e institución abrían siempre en "Seleccione...": el modal se guardaba sin tocar nada de
+ formación y, en apariencia, el título se perdía.*/
+  function pintarFormacionEdicion(formacion) {
+    var filas = Array.isArray(formacion) ? formacion : [];
+    var caja = document.getElementById('editFormacionActual');
+    var inputId = document.getElementById('editFormacionId');
+    var quitar = document.getElementById('editFormacionEliminar');
+    var selGrado = document.getElementById('editEmpleado__gradoAcademico');
+    var selTitulo = document.getElementById('editEmpleado__titulo');
+    var selInst = document.getElementById('editEmpleado__institucion');
+    var fecha = document.getElementById('editEmpleado__fechaObtencion');
+
+    if (inputId) inputId.value = '';
+    if (quitar) quitar.value = '';
+    if (caja) caja.classList.add('d-none');
+
+    if (!filas.length) return;
+
+    var primera = filas[0];
+    if (inputId) inputId.value = String(primera.id_formacion_academica || '');
+    if (selGrado && primera.id_grado_academico) selGrado.value = String(primera.id_grado_academico);
+    if (selTitulo && primera.id_titulo) selTitulo.value = String(primera.id_titulo);
+    if (selInst && primera.id_institucion) selInst.value = String(primera.id_institucion);
+    if (fecha && primera.fecha_obtencion) {
+      fecha.value = String(primera.fecha_obtencion).slice(0, 10);
+    }
+
+    if (!caja) return;
+    var t = document.getElementById('editFormacionTitulo');
+    var det = document.getElementById('editFormacionDetalle');
+    var opcionTitulo = selTitulo && selTitulo.selectedIndex >= 0 ? selTitulo.options[selTitulo.selectedIndex] : null;
+    var opcionInst = selInst && selInst.selectedIndex >= 0 ? selInst.options[selInst.selectedIndex] : null;
+
+    if (t) t.textContent = opcionTitulo ? opcionTitulo.text : ('Título ' + primera.id_titulo);
+    if (det) {
+      var partes = [];
+      if (opcionInst) partes.push(opcionInst.text);
+      if (primera.fecha_obtencion) partes.push('obtenido el ' + formatearFecha(primera.fecha_obtencion));
+      if (filas.length > 1) {
+        partes.push('y ' + (filas.length - 1) + ' título(s) más que este modal no muestra; '
+          + 'no se borran al guardar');
+      }
+      det.textContent = partes.join(' · ');
+    }
+    caja.classList.remove('d-none');
+  }
+
+  var btnQuitarFormacion = document.getElementById('editFormacionQuitar');
+  if (btnQuitarFormacion) {
+    btnQuitarFormacion.addEventListener('click', async function () {
+      var selGradoQ = document.getElementById('editEmpleado__gradoAcademico');
+      var selTituloQ = document.getElementById('editEmpleado__titulo');
+      var selInstQ = document.getElementById('editEmpleado__institucion');
+      var fechaQ = document.getElementById('editEmpleado__fechaObtencion');
+      var tituloQ = selTituloQ && selTituloQ.selectedIndex >= 0 ? selTituloQ.options[selTituloQ.selectedIndex].text : '';
+
+      var ok = await SIGDEUI.confirmar({
+        icono: 'warning',
+        titulo: '¿Quitar la formación?',
+        texto: 'Se eliminará'
+          + (tituloQ ? ' el título "' + tituloQ + '"' : ' el registro de formación')
+          + ' de este empleado. Para dejarlo sin formación, debes registrar otro título desde'
+          + ' el alta de empleado.',
+        confirmar: 'Sí, quitar'
+      });
+      if (!ok) return;
+
+      /* Se vacían los campos para que quede claro que ya no hay nada que guardar, pero la
+ orden la lleva el campo eliminar_formacion: si el guardado fallara, los <select>
+ vacíos NO pueden acabar borrando la fila, porque eso solo pasa con ese campo.*/
+      if (selGradoQ) selGradoQ.value = '';
+      if (selTituloQ) selTituloQ.value = '';
+      if (selInstQ) selInstQ.value = '';
+      if (fechaQ) fechaQ.value = '';
+      var eliminar = document.getElementById('editFormacionEliminar');
+      if (eliminar) eliminar.value = '1';
+      var caja = document.getElementById('editFormacionActual');
+      if (caja) caja.classList.add('d-none');
+      SIGDEUI.mostrarAviso('info', 'Formación marcada para quitar',
+        'Pulsa Guardar para aplicar el cambio.');
+    });
+  }
 
   function filtrarTitulosEdicion() {
     if (!selGradoEd || !selTituloEd) return;
@@ -380,9 +463,11 @@ function initEditarEmpleadoModal() {
           : '—';
       }
 
-      // Filtra los títulos al grado del empleado (y lo conserva si sigue
-      // siendo válido; si el título guardado pertenece a otro grado, queda
-      // en "Seleccione..." para rehacerlo).
+      // Primero la formación guardada y DESPUÉS el filtrado, en ese orden: el filtrado usa
+      // el grado que hay seleccionado, y al abrir el modal ese grado todavía está en
+      // "Seleccione...". Al revés, todos los títulos quedaban ocultos y el que se precargaba
+      // caía dentro de una opción en hidden, así que el select se veía vacío.
+      pintarFormacionEdicion(d.formacion);
       filtrarTitulosEdicion();
 
       SIGDEUI.mostrarModal(modalEditarEl);
@@ -465,15 +550,9 @@ function initWizardRegistro() {
 
   if (totalPasos <= 0) return;
 
-  /* Normaliza los nombres al salir del campo.
-     El servidor igual los normaliza al guardar (TextoTrait::capitalizarTitulo),
-     pero si solo lo hiciera al guardar, la persona vería en el campo lo que
-     escribió y en la confirmación tampoco notaría el cambio: se guardaría
-     "Juan de la Cruz" y el registro ya hecho no coincidiría con lo que leyó.
-     Normalizando al salir, el campo mismo queda con lo que va a guardarse.
-
-     Se hace en `blur` y no en cada tecla: capitalizar mientras se escribe pelea
-     con quien está escribiendo. Al salir ya no estorba. */
+  /* Normaliza los nombres al salir del campo. El servidor igual los normaliza al guardar, pero si
+ solo lo hiciera al guardar, la persona vería en el campo lo que escribió y en la confirmación
+ tampoco notaría el cambio.*/
   ['primer_nombre', 'segundo_nombre', 'primer_apellido', 'segundo_apellido']
     .forEach(function (nombreCampo) {
       var campo = formNuevo.querySelector('[name="' + nombreCampo + '"]');
@@ -849,8 +928,8 @@ function initWizardRegistro() {
   // ---------- Alta rápida de título / institución ----------
   // Quien llama cierra el modal anidado cuando recibe truthy.
   /* El alta rapida vive en SIGDEUI, compartida con el wizard de inscripciones:
-     arma el POST, avisa el resultado con el mismo texto que los modulos de
-     catalogos y agrega la <option> nueva al select de destino. */
+ arma el POST, avisa el resultado con el mismo texto que los modulos de
+ catalogos y agrega la <option> nueva al select de destino.*/
   function guardarCatalogoRapido(accion, campos, selectDestino, dataAttr) {
     return SIGDEUI.guardarCatalogoRapido(
       baseUrl + rutaControlador + '/' + accion,
@@ -974,16 +1053,9 @@ function initWizardRegistro() {
       var valor;
       switch (el.dataset.resumen) {
           case 'nombre_completo':
-            /* Se normaliza por CAMPO y después se une, en ese orden, y no al revés.
-               Es el mismo orden en que guarda el servidor (EmpleadoController
-               normaliza primer_nombre, segundo_nombre, primer_apellido y
-               segundo_apellido por separado). Importa: si se uniera primero y se
-               normalizara la cadena junta, el apellido "De la Cruz" se vería
-               "de la Cruz", porque en la cadena junta "de" ya no es la primera
-               palabra y cuenta como conector. La base guarda "De la Cruz" y el
-               resumen volvería a mentir, que es justo lo que se vino a arreglar.
-
-               Por eso el .map() va antes del .join(), y no al revés. */
+            /* Se normaliza por CAMPO y después se une, en ese orden y no al revés: es el mismo que sigue el
+ servidor (EmpleadoController normaliza primer_nombre, segundo_nombre, primer_apellido y
+ segundo_apellido por separado). Si se uniera primero, "de la" perdería la minúscula.*/
             valor = ['primer_nombre', 'segundo_nombre', 'primer_apellido', 'segundo_apellido']
               .map(function (campo) { return SIGDEUI.normalizarNombre(textoCampo(campo)); })
               .filter(Boolean).join(' ');
@@ -1018,6 +1090,7 @@ function initWizardRegistro() {
           break;
         case 'punto_referencia': valor = textoCampo('punto_referencia'); break;
         case 'cargo': valor = textoSeleccion('id_cargo'); break;
+        case 'turno': valor = textoSeleccion('id_turno'); break;
         case 'fecha_ingreso': valor = formatearFecha(textoCampo('fecha_ingreso')); break;
         default: valor = textoCampo(el.dataset.resumen);
       }

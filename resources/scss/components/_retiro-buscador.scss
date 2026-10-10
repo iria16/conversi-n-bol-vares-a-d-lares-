@@ -1,0 +1,42 @@
+// Componente: _retiro-buscador.scss
+// Filas de resultado del buscador de estudiante del modal de retiro.
+//
+// Es una lista de Bootstrap (list-group) con dos variantes: la que se puede
+// elegir (es un <button>) y la que está bloqueada (es un <div> con el motivo
+// del bloqueo). La bloqueada no es decorativa: es la respuesta a "¿por qué no
+// aparece este alumno?", y sin ella la secretaria no distinguiría entre un
+// alumno inexistente y uno que ya egresó.
+
+.retiro-resultado {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  align-items: flex-start;
+  text-align: left;
+  border: 0;
+  background: transparent;
+
+  &__principal {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: $primary;
+  }
+
+  &__secundario {
+    font-size: 0.78rem;
+    color: shade-color($primary, 35%);
+  }
+
+  // El bloqueo se explica, no se sugiere: el motivo viene del servidor y dice
+  // qué pasó con ese alumno.
+  &__motivo {
+    font-size: 0.75rem;
+    color: $danger;
+    line-height: 1.35;
+  }
+
+  &--bloqueado {
+    opacity: 0.75;
+    cursor: not-allowed;
+  }
+}

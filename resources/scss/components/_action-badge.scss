@@ -44,4 +44,36 @@
     background: rgba($secondary, 0.12);
     color: shade-color($secondary, 10%);
   }
+
+  // Procesos académicos. Cada uno con su color porque en la auditoría se distinguen a
+  // simple vista: una entrada de alumno, una continuidad, una salida y una culminación.
+  &--password {
+    background: rgba($warning, 0.14);
+    color: shade-color($warning, 20%);
+  }
+
+  &--inscripcion {
+    background: rgba($success, 0.12);
+    color: shade-color($success, 5%);
+  }
+
+  &--ratificacion {
+    background: rgba($primary, 0.12);
+    color: shade-color($primary, 8%);
+  }
+
+  &--retiro {
+    background: rgba($danger, 0.1);
+    color: shade-color($danger, 5%);
+  }
+
+  &--egreso {
+    background: rgba(#6f42c1, 0.12);
+    color: #6f42c1;
+  }
+
+  &--anio {
+    background: rgba($info, 0.12);
+    color: shade-color($info, 5%);
+  }
 }

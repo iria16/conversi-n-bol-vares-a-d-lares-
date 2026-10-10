@@ -44,6 +44,7 @@ class CatalogoController extends CrudController
         // Los pide el sub-modal de familiares para el representante legal.
         'ocupacion'         => ['nombre' => 'Ocupación',           'icono'  => 'bi-briefcase',          'modelClass' => 'OcupacionModel',        'formato' => 'titulo'],
         'nivel_instruccion' => ['nombre' => 'Nivel de Instrucción', 'icono' => 'bi-mortarboard',       'modelClass' => 'NivelInstruccionModel', 'formato' => 'titulo'],
+        'nacionalidad'      => ['nombre' => 'Nacionalidad',         'icono' => 'bi-globe-americas',     'modelClass' => 'NacionalidadModel',    'formato' => 'titulo'],
     ];
 
     /** Clave del catálogo activo; se fija en createModel(). */

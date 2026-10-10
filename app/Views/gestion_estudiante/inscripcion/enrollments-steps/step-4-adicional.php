@@ -11,7 +11,7 @@
  * Las dos tarjetas son plegables (wizard-extra-card) y se abren desde
  * enrollments.js. Los campos van a las tablas `talla_uniforme` y
  * `ficha_medica`, ambas por estudiante (id_estudiante).
- */
+*/
 ?>
 <div class="info-alert mb-3">
   <div class="info-alert__icon"><i class="bi bi-info-lg"></i></div>
@@ -91,7 +91,7 @@
 <div class="wizard-extra-card">
   <button type="button" class="wizard-extra-card__header" data-extra-toggle="medica">
     <span class="wizard-extra-card__icon wizard-extra-card__icon--pink">
-      <i class="bi bi-briefcase-medical" aria-hidden="true"></i>
+      <i class="bi bi-clipboard2-pulse" aria-hidden="true"></i>
     </span>
     <span class="wizard-extra-card__text">
       <strong>Ficha médica</strong>

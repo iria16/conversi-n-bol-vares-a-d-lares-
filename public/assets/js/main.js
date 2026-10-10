@@ -1,7 +1,7 @@
 /* ==========================================================================
-   SIGDE - main.js
-   Comportamiento general reutilizable en todas las vistas.
-   ========================================================================== */
+ SIGDE - main.js
+ Comportamiento general reutilizable en todas las vistas.
+ ==========================================================================*/
 
 document.addEventListener('DOMContentLoaded', function () {
   initPasswordToggles();
@@ -151,6 +151,11 @@ function initAutoFilters() {
 
     // Filtros de selección inmediata
     form.querySelectorAll('select').forEach(function (select) {
+      /* Un filtro marcado con data-carga-completa recarga la página entera por su cuenta, y aquí se le
+ quita la escucha a propósito: el refresco por AJAX solo reemplaza el cuerpo y el pie del
+ panel, así que lo que está por fuera se quedaría con el valor anterior.*/
+      if (select.hasAttribute('data-carga-completa')) return;
+
       select.addEventListener('change', function () {
         applyFilters(1, true);
       });
@@ -207,18 +212,9 @@ function initAutoFilters() {
   });
 }
 
-/**
- * Muestra/oculta el valor de un input de contraseña.
- * Marcado esperado:
- * <div class="input-icon-group">
- *   <i class="bi bi-lock"></i>
- *   <input type="password" class="form-control" data-password-field>
- *   <button type="button" class="input-icon-group__toggle" data-password-toggle
- *           aria-label="Mostrar contraseña">
- *     <i class="bi bi-eye"></i>
- *   </button>
- * </div>
- */
+  /* Muestra/oculta el valor de un input de contraseña, por el marcado data-password-field dentro
+ de un .input-icon-group y el botón data-password-toggle. El input se busca por ese atributo y
+ no por id, porque el mismo componente se repite en varias vistas.*/
 function initPasswordToggles() {
   document.querySelectorAll('[data-password-toggle]').forEach(function (btn) {
     btn.addEventListener('click', function () {
@@ -245,7 +241,7 @@ function initPasswordToggles() {
  * El navegador valida required / minlength / type / pattern de forma
  * nativa; esto solo se encarga de mostrar el feedback visual de Bootstrap
  * y de bloquear el envío mientras el formulario no sea válido.
- */
+*/
 function initFormValidation() {
   document.querySelectorAll('.needs-validation').forEach(function (form) {
     form.addEventListener('submit', function (event) {
@@ -264,7 +260,7 @@ function initFormValidation() {
  * etc.), y lo habilita en cuanto el usuario completa todo correctamente.
  * Se reevalúa en cada "input" para dar respuesta inmediata mientras se
  * escribe, sin esperar al submit.
- */
+*/
 function initSubmitEnableOnValid() {
   document.querySelectorAll('.needs-validation').forEach(function (form) {
     var submitBtn = form.querySelector('[type="submit"]');
@@ -279,17 +275,9 @@ function initSubmitEnableOnValid() {
   });
 }
 
-/**
- * Actualiza en vivo el checklist de requisitos de una contraseña
- * (mínimo de caracteres, letra, número) mientras el usuario escribe.
- * Marcado esperado:
- * <input data-password-requirements-target minlength="6" ...>
- * <ul data-password-requirements>
- *   <li data-requirement="length">...</li>
- *   <li data-requirement="letter">...</li>
- *   <li data-requirement="number">...</li>
- * </ul>
- */
+  /* Actualiza en vivo el checklist de requisitos de una contraseña (mínimo de caracteres, letra,
+ número) mientras se escribe. El checklist se marca con data-password-requirements y el input
+ apunta a él con data-password-requirements-target; el minlength real lo pone el navegador.*/
 function initPasswordRequirementsChecklist() {
   var input = document.querySelector('[data-password-requirements-target]');
   var list = document.querySelector('[data-password-requirements]');
@@ -319,7 +307,7 @@ function initPasswordRequirementsChecklist() {
  * Marcado esperado:
  * <input id="nuevaPassword" ...>
  * <input data-match-target="#nuevaPassword" ...>
- */
+*/
 function initPasswordMatchValidation() {
   document.querySelectorAll('[data-match-target]').forEach(function (input) {
     var target = document.querySelector(input.getAttribute('data-match-target'));
@@ -341,7 +329,7 @@ function initPasswordMatchValidation() {
  * al cerrar un modal mientras el foco sigue en un elemento interno
  * (por ejemplo el botón .btn-close). Se le quita el foco al elemento
  * activo justo antes de que Bootstrap le ponga aria-hidden al modal.
- */
+*/
 function initModalFocusFix() {
   document.addEventListener('hide.bs.modal', function (event) {
     if (document.activeElement && event.target.contains(document.activeElement)) {

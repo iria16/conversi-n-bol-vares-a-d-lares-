@@ -1,0 +1,31 @@
+// Tabs dentro de un modal (el de "Editar estudiante" de Ratificación).
+//
+// Por qué hace falta una regla propia, si Bootstrap ya tiene .nav-link.active:
+// porque el marcado traía clases de color FIJAS — `text-dark fw-medium` en la
+// primera pestaña y `text-muted` en las demás. Esas dos utilidades llevan
+// `!important` y están definidas DESPUÉS de `.nav-link.active` en el CSS
+// compilado, así que ganaban siempre: la pestaña activa se veía atenuada y la
+// primera se veía oscura estando inactiva. El color, en vez de moverse con la
+// pestaña activa, se quedaba siempre en la primera.
+//
+// La regla deja el color a cargo del estado (`.active` lo pone Bootstrap) y solo
+// fija el tono del proyecto para la pestaña activa, que es lo que se busca: que
+// las letras cambien de color al cambiar de pestaña.
+
+.modal-tabs {
+  .nav-link {
+    color: $secondary;
+    font-weight: 500;
+    transition: color .15s ease-in-out;
+  }
+
+  .nav-link:hover,
+  .nav-link:focus {
+    color: $primary;
+  }
+
+  .nav-link.active {
+    color: $primary;
+    font-weight: 600;
+  }
+}

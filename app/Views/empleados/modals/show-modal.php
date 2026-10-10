@@ -8,7 +8,7 @@
  *
  * IMPORTANTE: usa los MISMOS data-campo del archivo original.
  * No requiere cambios en empleado.js ni en el backend.
- */
+*/
 
 // Helper local: imprime un par label/valor dentro de un wizard-summary__grid.
 $campo = static function (string $etiqueta, string $clave): void {
@@ -52,6 +52,7 @@ ob_start();
           <?php
             $campo('Documento de identidad', 'cedula');
             $campo('Fecha de nacimiento', 'fecha_nacimiento');
+            $campo('Nacionalidad', 'nacionalidad');
             $campo('Sexo', 'sexo');
           ?>
         </div>
@@ -69,6 +70,7 @@ ob_start();
         <div class="wizard-summary__grid">
           <?php
             $campo('Cargo', 'cargo');
+            $campo('Turno de trabajo', 'turno');
             $campo('Fecha de ingreso', 'fecha_ingreso');
             $campo('Fecha de egreso', 'fecha_egreso');
           ?>

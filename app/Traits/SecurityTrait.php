@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace App\Traits;
 
 if (!function_exists(__NAMESPACE__ . '\\sigde_rol_clave')) {
+    /**
+ * Convierte el nombre de un rol de la BD en la clave que usa la matriz de rutas de index.php.
+ * Un rol desconocido se devuelve en minúsculas y sin tildes, y no coincidirá con ninguna ruta (403).
+*/
     function sigde_rol_clave(string $rol): string
     {
         $rol = mb_strtolower(trim($rol), 'UTF-8');
@@ -25,9 +29,10 @@ if (!function_exists(__NAMESPACE__ . '\\sigde_rol_clave')) {
 
 trait SecurityTrait
 {
-    /*
-     Limpia y valida un correo electrónico.
-     */
+    /**
+ * Limpia y valida un correo electrónico.
+ * Devuelve el correo sin espacios o false si el formato no es válido.
+*/
     public function sanitizarEmail(string $email): string|false
     {
         $emailLimpio = trim($email);
@@ -37,31 +42,20 @@ trait SecurityTrait
         return $emailLimpio;
     }
 
-    /*
-      Escapa una cadena para imprimirla dentro de HTML.
-
-      IMPORTANTE: este helper es para la SALIDA (vistas), no para la entrada.
-      Nunca guardes el resultado en base de datos ni en $_SESSION: eso corrompe
-      el dato original (un apellido como O'Brien queda como O&#039;Brien) y no
-      protege si ese mismo dato se envía luego en JSON o en un PDF.
-     */
+    /**
+ * Escapa un texto para imprimirlo en HTML. Úsalo solo en la SALIDA (vistas).
+ * No guardes el resultado en la BD ni en $_SESSION: corrompe el dato (O'Brien pasa a O&#039;Brien).
+*/
     public function sanitizarTexto(string $texto): string
     {
         return htmlspecialchars(trim($texto), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 
-    /*
-        Garantiza que la sesión esté iniciada y que el usuario esté autenticado.
-        Si no hay sesión, redirige al login.
-
-        Antes guardaba aquí la URL solicitada (`redirect_after_login`) para
-        devolver al usuario a esa página después de entrar, que es lo que hacen
-        casi todas las aplicaciones. Ya no se guarda: al entrar SIEMPRE se va al
-        dashboard, porque si el cierre de sesión fue intencional, la pantalla de
-        entrada debe ser la misma siempre y no depender del último módulo en el
-        que se estaba. Ver AuthController::authenticate(), que es donde se
-        decide el destino.
-     */
+    /**
+ * Comprueba que haya un usuario autenticado; si no, avisa con SweetAlert y redirige al login.
+ * Es una segunda línea de defensa: index.php ya filtra las rutas privadas antes de llegar aquí.
+ * Tras el login siempre se va al dashboard (ver AuthController::authenticate()).
+*/
     public function verificarSesion(): void
     {
         if (session_status() === PHP_SESSION_NONE) {
@@ -78,50 +72,11 @@ trait SecurityTrait
         }
     }
 
-    /*
-     Destruye la sesión de forma agresiva porque el usuario ha sido bloqueado.
-     */
-    public function destruirSesionPorBloqueo(int $minutosRestantes): never
-    {
-        $_SESSION = [];
-
-        if (ini_get('session.use_cookies')) {
-            $params = session_get_cookie_params();
-            setcookie(
-                session_name(),
-                '',
-                time() - 42000,
-                $params['path'],
-                $params['domain'],
-                $params['secure'],
-                $params['httponly']
-            );
-        }
-
-        session_destroy();
-        session_start();
-
-        $_SESSION['swal'] = [
-            'icon'  => 'warning',
-            'title' => 'Cuenta bloqueada',
-            'text'  => "Tu cuenta ha sido bloqueada por seguridad. Intente nuevamente en {$minutosRestantes} minuto(s)."
-        ];
-
-        $this->redireccionar('auth/login');
-    }
-
-    /*
-      Valida que una contraseña cumpla con los requisitos mínimos de
-      seguridad. Alineado con el checklist visual del frontend
-      (main.js: initPasswordRequirementsChecklist): longitud mínima,
-      al menos una letra y al menos un número. No exige mayúscula ni
-      carácter especial a propósito: el bloqueo tras 3 intentos
-      fallidos ya cubre la fuerza bruta, y el objetivo es reducir
-      fricción para personal no técnico.
-
-      Se mide con mb_strlen (caracteres, no bytes) para que las tildes
-      no cuenten doble.
-     */
+    /**
+ * Valida los requisitos mínimos de una contraseña: 8 a 64 caracteres, una letra y un número.
+ * Coincide con el checklist de main.js. No pide mayúscula ni símbolo: el bloqueo por intentos ya frena la fuerza bruta.
+ * Devuelve true si es válida o el mensaje de error.
+*/
     public function validarPasswordFuerte(string $password): string|true
     {
         $longitud = mb_strlen($password, 'UTF-8');
@@ -132,6 +87,10 @@ trait SecurityTrait
         if ($longitud > 64) {
             return 'La contraseña no puede tener más de 64 caracteres.';
         }
+        // bcrypt ignora todo lo que pase de 72 BYTES; con tildes 64 caracteres pueden superarlos.
+        if (strlen($password) > 72) {
+            return 'La contraseña es demasiado larga. Use menos caracteres o evite las tildes.';
+        }
         if (!preg_match('/[a-zA-Z]/', $password)) {
             return 'La contraseña debe contener al menos una letra.';
         }
@@ -139,12 +98,14 @@ trait SecurityTrait
             return 'La contraseña debe contener al menos un número.';
         }
 
-        return true; // Si pasa las pruebas, cumple el mínimo
+        return true;
     }
 
-    /*
-     Valida que un nombre completo solo contenga letras y espacios.
-     */
+    /**
+ * Valida un nombre completo: de 3 a 100 caracteres con letras (con tildes y ñ), espacios, apóstrofos y guiones.
+ * Admite nombres como D'Ambrosio o María-José y rechaza números y otros símbolos.
+ * Devuelve true si es válido o el mensaje de error.
+*/
     public function validarNombreCompleto(string $nombre): string|true
     {
         $nombreLimpio = trim($nombre);
@@ -158,19 +119,18 @@ trait SecurityTrait
             return 'El nombre no puede exceder los 100 caracteres.';
         }
 
-        // Solo letras (con tildes y ñ) y espacios. Sin números ni símbolos.
-        if (!preg_match('/^[\p{L}\s]+$/u', $nombreLimpio)) {
-            return 'El nombre solo debe contener letras y espacios (sin números ni caracteres especiales).';
+        // \p{L} letras, \p{M} tildes escritas como carácter combinado; el espacio es explícito (sin saltos de línea).
+        if (!preg_match('/^[\p{L}\p{M}\' \-]+$/u', $nombreLimpio)) {
+            return 'El nombre solo debe contener letras, espacios, apóstrofos y guiones (sin números ni otros símbolos).';
         }
 
         return true;
     }
 
-    /*
-     Helper para centralizar las redirecciones y cortar la ejecución.
-     Declarado ": never" para que PHP y el análisis estático sepan que
-     nada se ejecuta después de llamarlo.
-     */
+    /**
+ * Redirige a una ruta del sistema (BASE_URL + $url) y corta la ejecución.
+ * Es `never`: PHP y el análisis estático saben que nada se ejecuta después de llamarlo.
+*/
     private function redireccionar(string $url): never
     {
         $urlCompleta = BASE_URL . ltrim($url, '/');

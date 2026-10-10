@@ -8,11 +8,11 @@
  *
  * Espera del controlador (EmpleadoController, vía EmpleadoModel::getAll):
  * @var array $empleados cada uno: ['id_empleado','nombre_completo','primer_nombre',
- *                       'primer_apellido','tipo_documento','numero_documento',
- *                       'cargo','estado' => 'ACTIVO'|'INACTIVO','foto',
- *                       'avatar_tipo','avatar_foto','iniciales','avatar_color']
- *                       (avatar_* los genera AvatarTrait en el modelo).
- */
+ * 'primer_apellido','tipo_documento','numero_documento',
+ * 'cargo','turno','estado' => 'ACTIVO'|'INACTIVO','foto',
+ * 'avatar_tipo','avatar_foto','iniciales','avatar_color']
+ * (avatar_* los genera AvatarTrait en el modelo).
+*/
 
 foreach ($empleados as $e):
     // persona.estado se guarda en MAYÚSCULA; strtoupper() evita que esto se
@@ -38,7 +38,14 @@ foreach ($empleados as $e):
       </div>
     </td>
     <td><?= htmlspecialchars($e['tipo_documento'] . '-' . $e['numero_documento']) ?></td>
-    <td><?= htmlspecialchars((string) ($e['cargo'] ?? 'Sin cargo')) ?></td>
+    <td>
+      <?= htmlspecialchars((string) ($e['cargo'] ?? 'Sin cargo')) ?>
+      <div class="text-support small"><?= htmlspecialchars((string) ($e['turno'] ?? 'Sin turno')) ?></div>
+    </td>
+    <?php /* La nacionalidad se imprime aunque esté vacía: la columna existe porque la
+            secretaria la consulta, y una celda en blanco delata que falta el dato
+             mientras un "—" la haría indistinguishable de las que sí lo tienen. */ ?>
+    <td class="text-support"><?= htmlspecialchars((string) ($e['nacionalidad'] ?? '')) ?></td>
     <td>
       <?php
         $badgeLabel  = $esInactivo ? 'Inactivo' : 'Activo';
@@ -75,7 +82,9 @@ foreach ($empleados as $e):
 
 <?php if (empty($empleados)): ?>
   <tr>
-    <td colspan="5" class="text-center text-support py-4">
+    <?php /* El colspan tiene que seguir la cuenta de columnas: al agregar
+             Nacionalidad pasaron a ser 6 y con el 5 quedaba una celda sin cubrir. */ ?>
+    <td colspan="6" class="text-center text-support py-4">
       No se encontraron empleados con los filtros seleccionados.
     </td>
   </tr>

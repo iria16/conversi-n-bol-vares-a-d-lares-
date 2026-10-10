@@ -1,15 +1,6 @@
-/* ==========================================================================
-   SIGDE - recuperacion.js
-   Comportamiento específico de la vista de Recuperación de Acceso:
-   aprobar / rechazar solicitudes, modal Ver Detalle, restablecimiento
-   manual de contraseña y copiado de credenciales.
-   Depende de: Bootstrap 5 (modales), SweetAlert2 (opcional),
-   window.BASE_URL (definido globalmente en layouts/app.php).
-   Nota: el backend (RecuperacionAccesoController) responde siempre vía
-   BaseController::jsonResponse(), forma {ok, mensaje, data} — nunca
-   'datos'. No usar el fallback data.datos || data.data de otros
-   módulos legados; aquí data.data es siempre la clave correcta.
-   ========================================================================== */
+/* SIGDE - recuperacion.js
+ Vista de Recuperación de Acceso: aprobar/rechazar solicitudes, modal Ver Detalle,
+ restablecimiento manual de contraseña y copiado de credenciales.*/
 
 document.addEventListener('DOMContentLoaded', function () {
   initAprobarSolicitud();
@@ -22,17 +13,21 @@ document.addEventListener('DOMContentLoaded', function () {
 var baseUrl = window.BASE_URL || '';
 var rutaControlador = 'recuperacionAcceso';
 
-/* Los helpers de red (postForm/getJson) viven en SIGDEUI (sigde-ui.js):
-   los usaban este módulo y academic-years.js con el mismo cuerpo. */
+/**
+ * Devuelve siempre el sobre del servidor {ok, mensaje, data}, tanto si SIGDEUI lo entrega
+ * directo como si lo envuelve en otro objeto {ok, status, data}. Evita leer un nivel equivocado.
+*/
+function sobreDe(respuesta) {
+  if (respuesta && respuesta.data && typeof respuesta.data === 'object' && 'ok' in respuesta.data) {
+    return respuesta.data;
+  }
+  return respuesta || {};
+}
 
 /**
- * Refresca la tabla de solicitudes conservando los filtros/página
- * actuales, en vez de recargar toda la página (que los perdería, ya
- * que initAutoFilters() de main.js aplica los filtros vía AJAX sin
- * tocar la URL en cada cambio de <select>/búsqueda). Si por algún
- * motivo el formulario de filtros no está en el DOM o no expuso su
- * refreshDataPanel(), se recurre a location.reload() como respaldo.
- */
+ * Refresca la tabla de solicitudes conservando filtros y página, en vez de recargar todo.
+ * Si el formulario de filtros no expone refreshDataPanel(), recarga la página como respaldo.
+*/
 function refrescarListaSolicitudes() {
   var filterForm = document.querySelector('form.data-panel__filters, form.auto-filters');
   if (filterForm && typeof filterForm.refreshDataPanel === 'function') {
@@ -42,15 +37,11 @@ function refrescarListaSolicitudes() {
   }
 }
 
-/* ── Aprobar solicitud ──────────────────────────────────────────── */
+/* Aprobar solicitud. Exige un motivo: una recuperación de acceso sin explicación no es
+ * auditable, y el motivo queda en la bitácora.*/
 
-// Delegado en document (no en cada botón): las filas se reemplazan por
-// completo cuando refrescarListaSolicitudes()/refreshDataPanel() actualiza
-// la tabla vía AJAX (filtro, búsqueda, paginación), así que los botones
-// .aprobar-solicitud de las filas nuevas nunca existieron cuando
-// DOMContentLoaded corrió initAprobarSolicitud() la primera vez. Atar el
-// listener a document evita tener que "reinicializar" nada después de
-// cada refresco del panel.
+// Delegado en document: las filas se reemplazan por AJAX al filtrar o paginar,
+// y así los botones nuevos funcionan sin volver a inicializar nada.
 function initAprobarSolicitud() {
   document.addEventListener('click', function (e) {
     var btn = e.target.closest('.aprobar-solicitud');
@@ -62,8 +53,7 @@ async function aprobarSolicitud(btn) {
   var id = btn.dataset.solicitudId;
   var nombre = btn.dataset.usuarioNombre || '';
 
-  var confirmacion = false;
-  confirmacion = await SIGDEUI.confirmar({
+  var confirmacion = await SIGDEUI.confirmar({
     titulo: '¿Aprobar solicitud?',
     texto: '¿Aprobar la solicitud de ' + nombre + '? Se generará una contraseña provisional.',
     confirmar: 'Sí, aprobar'
@@ -72,17 +62,22 @@ async function aprobarSolicitud(btn) {
 
   btn.disabled = true;
   try {
-    var data = await SIGDEUI.postForm(baseUrl + rutaControlador + '/updateEstado', {
+    var sobre = sobreDe(await SIGDEUI.postForm(baseUrl + rutaControlador + '/updateEstado', {
       id: id,
       accion: 'aprobar'
-    });
+    }));
 
-    if (!data.ok) {
-      SIGDEUI.mostrarError(data.mensaje || 'No se pudo aprobar la solicitud.');
+    if (!sobre.ok) {
+      SIGDEUI.mostrarError(sobre.mensaje || 'No se pudo aprobar la solicitud.');
       return;
     }
 
-    mostrarCredenciales(data.data);
+    if (!mostrarCredenciales(sobre.data)) {
+      SIGDEUI.mostrarError('La solicitud se aprobó, pero la clave no llegó a la pantalla. '
+        + 'Restablezca la contraseña de ese usuario para generar una nueva.');
+      refrescarListaSolicitudes();
+      return;
+    }
 
     var modalCredencialesEl = document.getElementById('modalCredencialesUsuario');
     if (modalCredencialesEl) {
@@ -100,10 +95,9 @@ async function aprobarSolicitud(btn) {
   }
 }
 
-/* ── Rechazar solicitud ─────────────────────────────────────────── */
+/* ── Rechazar solicitud*/
 
-// Mismo motivo que initAprobarSolicitud(): delegado en document para que
-// siga funcionando después de que el panel se refresque vía AJAX.
+// Delegado en document, por el mismo motivo que en aprobar.
 function initRechazarSolicitud() {
   document.addEventListener('click', function (e) {
     var btn = e.target.closest('.rechazar-solicitud');
@@ -123,17 +117,17 @@ async function rechazarSolicitud(btn) {
 
   btn.disabled = true;
   try {
-    var data = await SIGDEUI.postForm(baseUrl + rutaControlador + '/updateEstado', {
+    var sobre = sobreDe(await SIGDEUI.postForm(baseUrl + rutaControlador + '/updateEstado', {
       id: id,
       accion: 'rechazar'
-    });
+    }));
 
-    if (!data.ok) {
-      SIGDEUI.mostrarError(data.mensaje || 'No se pudo rechazar la solicitud.');
+    if (!sobre.ok) {
+      SIGDEUI.mostrarError(sobre.mensaje || 'No se pudo rechazar la solicitud.');
       return;
     }
 
-    SIGDEUI.exito(data.mensaje || 'Solicitud rechazada.', '¡Listo!');
+    SIGDEUI.exito(sobre.mensaje || 'Solicitud rechazada.', '¡Listo!');
     setTimeout(function () { refrescarListaSolicitudes(); }, 600);
   } catch (err) {
     console.error('Error al rechazar la solicitud:', err);
@@ -143,13 +137,13 @@ async function rechazarSolicitud(btn) {
   }
 }
 
-/* ── Modal "Ver Detalle" ────────────────────────────────────────── */
+/* ── Modal "Ver Detalle"*/
 
 function initVerDetalleModal() {
   var modalDetalleEl = document.getElementById('modalDetalleSolicitud');
   if (!modalDetalleEl) return;
 
-  // Se dispara al abrir el modal por atributo data-bs-toggle (ver botones .ver-solicitud)
+  // Se dispara al abrir el modal desde un botón con data-bs-toggle (.ver-solicitud).
   modalDetalleEl.addEventListener('show.bs.modal', function (e) {
     var btn = e.relatedTarget;
     if (!btn) return;
@@ -162,25 +156,16 @@ function cargarYMostrarDetalle(id, modalDetalleEl) {
   var elNombre = modalDetalleEl.querySelector('#detalleNombre');
   if (elNombre) elNombre.textContent = 'Cargando...';
 
-    SIGDEUI.getJson(baseUrl + rutaControlador + '/getDetalle?id=' + encodeURIComponent(id))
-      .then(function (data) {
-        if (!data.ok) {
-          SIGDEUI.mostrarError(data.mensaje || 'No se pudo cargar el detalle.');
-          return;
-        }
-        /* Doble .data, a propósito, y es lo más fácil de romper de este archivo.
-           SIGDEUI.getJson() resuelve {ok, status, data} donde ese `data` es el
-           sobre que devolvió el servidor, {ok, mensaje, data:{...}}. La carga
-           útil está un nivel más adentro: data.data.data. Por eso acá van dos.
-
-           Antes se pasaba solo data.data, o sea el sobre, y pintarDetalleDetalle
-           leía d.nombre, d.estado, d.fecha... sobre un objeto que no tiene nada
-           de eso. No daba error: los `set()` caen a '—' y el estado se iba a
-           'pendiente', así que el modal abría LIMPIO y en silencio, con el
-           nombre, la fecha y el administrador en guiones. Parecía un modal vacío,
-           y en realidad era un modal con el sobre equivocado. */
-        pintarDetalleSolicitud(modalDetalleEl, data.data && data.data.data);
-      })
+  SIGDEUI.getJson(baseUrl + rutaControlador + '/getDetalle?id=' + encodeURIComponent(id))
+    .then(function (respuesta) {
+      var sobre = sobreDe(respuesta);
+      if (!sobre.ok) {
+        SIGDEUI.mostrarError(sobre.mensaje || 'No se pudo cargar el detalle.');
+        return;
+      }
+      // Los datos del detalle están en sobre.data (un nivel dentro del sobre del servidor).
+      pintarDetalleSolicitud(modalDetalleEl, sobre.data);
+    })
     .catch(function (err) {
       console.error('Error al cargar detalle:', err);
       SIGDEUI.mostrarError('Error de conexión al cargar el detalle.');
@@ -203,18 +188,16 @@ function pintarDetalleSolicitud(modalDetalleEl, d) {
     if (el) el.textContent = val || '—';
   };
 
-    set('detalleNombre', d.nombre);
-    set('detalleUsuario', d.usuario ? d.usuario : '—');
-    set('detalleFecha', ((d.fecha || '') + ' ' + (d.hora || '')).trim() || '—');
-    set('detalleCargo', d.cargo);
-    // El documento se arma aquí y no en el modelo porque el modelo manda el tipo
-    // y el número por separado, tal como se guardan. Lo que la persona ve, en
-    // cambio, es el documento junto: "V-22509285", como se cita en un expediente.
-    set('detalleDocumento', d.tipo_documento && d.numero_documento
-      ? d.tipo_documento + '-' + d.numero_documento
-      : '—');
-    set('detalleFechaAtencion', d.fecha_atencion);
-    set('detalleAdmin', d.admin_atendio);
+  set('detalleNombre', d.nombre);
+  set('detalleUsuario', d.usuario ? d.usuario : '—');
+  set('detalleFecha', ((d.fecha || '') + ' ' + (d.hora || '')).trim() || '—');
+  set('detalleCargo', d.cargo);
+  // El modelo envía tipo y número por separado; aquí se unen para mostrar "V-22509285".
+  set('detalleDocumento', d.tipo_documento && d.numero_documento
+    ? d.tipo_documento + '-' + d.numero_documento
+    : '—');
+  set('detalleFechaAtencion', d.fecha_atencion);
+  set('detalleAdmin', d.admin_atendio);
 
   var elEstado = modalDetalleEl.querySelector('#detalleEstado');
   if (elEstado) {
@@ -222,60 +205,44 @@ function pintarDetalleSolicitud(modalDetalleEl, d) {
     elEstado.className = 'status-badge status-badge--' + info[1];
   }
 
-  // 'origen' distingue una solicitud real del usuario ('solicitud')
-  // de un restablecimiento directo del admin sin solicitud previa
-  // ('admin') — ver RecuperacionAccesoModel::getDetalleSolicitud().
-  // Se alterna el título/texto del bloque de atención para no mostrar
-  // ambos casos como si fueran lo mismo.
+  // 'origen' distingue una solicitud del usuario ('solicitud') de un restablecimiento
+  // directo del admin ('admin'), y cambia el título y el texto del bloque de atención.
   var elTitulo = modalDetalleEl.querySelector('#detalleAtencionTitulo');
   var elTexto = modalDetalleEl.querySelector('#detalleAtencionTexto');
   var fechaAtencion = d.fecha_atencion || '—';
   var admin = d.admin_atendio || '—';
 
-    if (elTitulo && elTexto) {
-      /* Estos dos ids (el bloque y su ícono) existían en el HTML desde antes y
-         ningún script los tocaba: eran un cableado a medio hacer de un diseño
-         anterior. Ahora sirven para lo que parecían haber nacido para, que es
-         distinguir el estado a simple vista y no solo con el texto.
+  if (elTitulo && elTexto) {
+    var elBloque = modalDetalleEl.querySelector('#detalleAtencionBloque');
+    var elIcono  = modalDetalleEl.querySelector('#detalleAtencionIcono');
+    var pendiente = !d.fecha_atencion || !d.admin_atendio;
 
-         Sin atender es una advertencia: hay algo esperando y el ícono de
-         información ("aquí no hay nada que saber") engaña. Con el reloj de
-         arena se lee de un vistazo que la solicitud está en cola. */
-      var elBloque = modalDetalleEl.querySelector('#detalleAtencionBloque');
-      var elIcono  = modalDetalleEl.querySelector('#detalleAtencionIcono');
-      var pendiente = !d.fecha_atencion || !d.admin_atendio;
-
-      if (elBloque) {
-        elBloque.classList.toggle('info-alert--warning', pendiente);
-      }
-      if (elIcono) {
-        elIcono.classList.toggle('bi-hourglass-split', pendiente);
-        elIcono.classList.toggle('bi-info-circle', !pendiente);
-      }
-
-      /* El texto se arma según los tres casos que existen de verdad: atendida
-         por alguien, restablecida de una, o sin atender todavía.
-
-         Antes ponía "Atendida el <fecha> por <nombre>" siempre, y para una
-         solicitud pendiente salía "Atendida el — por —": afirmaba algo que
-         no había pasado y con dos huecos. Hoy no hay solicitudes pendientes en
-         la base, pero el código las admite y el día que haya una, el modal iba
-         a mentir con seguridad en vez de a lo sumo. */
-      if (pendiente) {
-        elTitulo.textContent = 'Sin atender todavía';
-        elTexto.innerHTML = 'Esta solicitud está pendiente de que un administrador la revise. '
-          + 'Todavía no hay fecha de atención ni responsable.';
-      } else if (d.origen === 'admin') {
-        elTitulo.textContent = 'Restablecimiento directo';
-        elTexto.innerHTML = 'Restablecida el <strong>' + SIGDEUI.escapeHtml(fechaAtencion) + '</strong> por <strong>' + SIGDEUI.escapeHtml(admin) + '</strong>, sin solicitud previa del usuario.';
-      } else {
-        elTitulo.textContent = 'Atención de la solicitud';
-        elTexto.innerHTML = 'Atendida el <strong>' + SIGDEUI.escapeHtml(fechaAtencion) + '</strong> por <strong>' + SIGDEUI.escapeHtml(admin) + '</strong>.';
-      }
+    // Sin atender se marca como advertencia y con reloj de arena, para verlo de un vistazo.
+    if (elBloque) {
+      elBloque.classList.toggle('info-alert--warning', pendiente);
     }
+    if (elIcono) {
+      elIcono.classList.toggle('bi-hourglass-split', pendiente);
+      elIcono.classList.toggle('bi-info-circle', !pendiente);
+    }
+
+    // Tres casos reales: sin atender, restablecida directo por el admin o atendida.
+    // Así no se afirma "Atendida el — por —" cuando la solicitud sigue pendiente.
+    if (pendiente) {
+      elTitulo.textContent = 'Sin atender todavía';
+      elTexto.innerHTML = 'Esta solicitud está pendiente de que un administrador la revise. '
+        + 'Todavía no hay fecha de atención ni responsable.';
+    } else if (d.origen === 'admin') {
+      elTitulo.textContent = 'Restablecimiento directo';
+      elTexto.innerHTML = 'Restablecida el <strong>' + SIGDEUI.escapeHtml(fechaAtencion) + '</strong> por <strong>' + SIGDEUI.escapeHtml(admin) + '</strong>, sin solicitud previa del usuario.';
+    } else {
+      elTitulo.textContent = 'Atención de la solicitud';
+      elTexto.innerHTML = 'Atendida el <strong>' + SIGDEUI.escapeHtml(fechaAtencion) + '</strong> por <strong>' + SIGDEUI.escapeHtml(admin) + '</strong>.';
+    }
+  }
 }
 
-/* ── Restablecer contraseña manualmente ─────────────────────────── */
+/* ── Restablecer contraseña manualmente*/
 
 function initRestablecerClaveForm() {
   var formRestablecerClave = document.getElementById('formRestablecerClave');
@@ -300,12 +267,12 @@ function initRestablecerClaveForm() {
     }
 
     try {
-      var data = await SIGDEUI.postForm(baseUrl + rutaControlador + '/resetPassword', {
+      var sobre = sobreDe(await SIGDEUI.postForm(baseUrl + rutaControlador + '/resetPassword', {
         usuario_id: usuarioId
-      });
+      }));
 
-      if (!data.ok) {
-        SIGDEUI.mostrarError(data.mensaje || 'No se pudo restablecer la contraseña.');
+      if (!sobre.ok) {
+        SIGDEUI.mostrarError(sobre.mensaje || 'No se pudo restablecer la contraseña.');
         return;
       }
 
@@ -314,14 +281,22 @@ function initRestablecerClaveForm() {
         SIGDEUI.ocultarModal(restablecerModalEl);
       }
 
-      mostrarCredenciales(data.data);
+      // Si la clave no llegó, se avisa en vez de abrir una modal vacía.
+      if (!mostrarCredenciales(sobre.data)) {
+        SIGDEUI.mostrarError('La contraseña se restableció, pero no llegó a la pantalla. '
+          + 'Repita el restablecimiento para generar una nueva.');
+        formRestablecerClave.reset();
+        refrescarListaSolicitudes();
+        return;
+      }
 
       var modalCredencialesEl = document.getElementById('modalCredencialesUsuario');
       if (modalCredencialesEl) {
+        // { once: true }: el listener se quita solo; sin él se acumulaba en cada restablecimiento.
         modalCredencialesEl.addEventListener('hidden.bs.modal', function () {
           formRestablecerClave.reset();
           refrescarListaSolicitudes();
-        });
+        }, { once: true });
       } else {
         formRestablecerClave.reset();
         refrescarListaSolicitudes();
@@ -338,18 +313,21 @@ function initRestablecerClaveForm() {
   });
 }
 
-/* ── Modal de credenciales (compartido por aprobar y restablecer) ── */
+/* ── Modal de credenciales (compartido por aprobar y restablecer) ──*/
 
-function mostrarCredenciales(data) {
-  var nombre = data ? data.nombre || '' : '';
-  var clave = data ? data.clave || '' : '';
+/**
+ * Muestra la clave provisional en la modal de credenciales.
+ * Devuelve false si la carga no trae clave, para que quien llama avise en vez de mostrar una modal vacía.
+*/
+function mostrarCredenciales(carga) {
+  if (!carga || !carga.clave) return false;
 
   var elNombre = document.getElementById('credUsuarioNombre');
   var elClave = document.getElementById('credPassword');
-  if (elNombre) elNombre.textContent = nombre;
-  if (elClave) elClave.textContent = clave;
+  if (elNombre) elNombre.textContent = carga.nombre || carga.usuario || '';
+  if (elClave) elClave.textContent = carga.clave;
 
   var modalEl = document.getElementById('modalCredencialesUsuario');
   if (modalEl) SIGDEUI.mostrarModal(modalEl);
+  return true;
 }
-

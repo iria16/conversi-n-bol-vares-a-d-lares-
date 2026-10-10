@@ -7,7 +7,7 @@
  * $filas = filas del resumen; cada fila agrupa 1 o 2 secciones (la fila se
  * divide sola en columnas, ver .wizard-summary__row). 'campos' => null indica
  * la sección de títulos, que se pinta por JS.
- */
+*/
 $filas = [
     [
         ['paso' => 1, 'icono' => 'bi-person', 'titulo' => 'Datos Personales', 'campos' => [
@@ -34,6 +34,7 @@ $filas = [
     [
         ['paso' => 4, 'icono' => 'bi-briefcase', 'titulo' => 'Información Laboral', 'campos' => [
             ['Cargo',            'cargo'],
+            ['Turno de trabajo', 'turno'],
             ['Fecha de ingreso', 'fecha_ingreso'],
         ]],
         ['paso' => 5, 'icono' => 'bi-mortarboard', 'titulo' => 'Formación Académica', 'campos' => null],

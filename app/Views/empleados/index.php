@@ -7,9 +7,9 @@
  * app/Views/components/ y los modales del módulo viven en empleados/modals/.
  *
  * Variables que pasa el controlador:
- *   Listado ..: $stats, $empleados, $cargos, $paginacion
- *   Modales ..: $gradosAcademicos, $titulos, $instituciones, $tiposInstitucion, $estados
- */
+ * Listado ..: $stats, $empleados, $cargos, $paginacion
+ * Modales ..: $gradosAcademicos, $titulos, $instituciones, $tiposInstitucion, $estados
+*/
 $pageTitle       = 'Gestión de Empleados';
 $pageDescription = 'Administre el personal docente, administrativo y auxiliar de la institución.';
 $currentNav      = 'empleados';
@@ -25,6 +25,7 @@ $titulos          = $titulos ?? [];
 $instituciones    = $instituciones ?? [];
 $tiposInstitucion = $tiposInstitucion ?? [];
 $estados          = $estados ?? [];
+$turnos           = $turnos ?? [];
 $paginacion       = $paginacion ?? ['desde' => 0, 'hasta' => 0, 'total' => 0, 'pagina_actual' => 1, 'total_paginas' => 1];
 
 // Filtros activos (se reflejan en los <select> al recargar)
@@ -106,6 +107,7 @@ ob_start();
   <th>Empleado</th>
   <th>Cédula</th>
   <th>Cargo</th>
+  <th>Nacionalidad</th>
   <th>Estado</th>
   <th class="text-center">Acciones</th>
 </tr>

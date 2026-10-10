@@ -4,15 +4,19 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use App\Support\AniosEscolares;
+use App\Exceptions\AnioEscolarCerradoException;
 use App\Exceptions\DatoFamiliarIncompletoException;
+use App\Support\AniosEscolares;
 use App\Interfaces\Creatable;
 use App\Interfaces\Listable;
 use App\Support\Documento;
 use App\Support\Instituciones;
-use App\Traits\ContactoDireccionTrait;
+use App\Support\Matriculas;
+
 use App\Traits\CupoEstructuraTrait;
-use App\Traits\FotoSubidaTrait;
+use App\Traits\FamiliaresModelTrait;
+use App\Traits\RecaudosModelTrait;
+use App\Traits\RetiradoTrait;
 use InvalidArgumentException;
 use Throwable;
 
@@ -20,16 +24,65 @@ use Throwable;
  * Gestión de inscripciones (inscripcion ↔ matricula ↔ estudiante): el alta crea persona, estudiante, matrícula e inscripción en una transacción.
  * Opcionalmente también contacto, dirección, ficha médica y familiares.
  * La inscripción no tiene columna de estado: todo registro creado por el wizard se considera "completa".
- */
+*/
 class InscripcionesModel extends BaseModel implements Listable, Creatable
 {
-    // Combinaciones del año y cupos: inscripción y ratificación leen lo mismo, así el número de la secretaria coincide con el del servidor.
+    /* La escritura de familiares vive en un trait porque inscripción y
+ ratificación hacen EXACTAMENTE lo mismo, y `persona_estudiante` tiene
+ UNIQUE (id_persona, id_estudiante): una de las dos copias se olvidaría del
+ UPDATE y reventaría con 1062 al volver a guardar al mismo familiar.*/
+    use FamiliaresModelTrait;
+    use RecaudosModelTrait;
+    /* Estado "retirado" derivado (ver RetiradoTrait). Lo necesita el listado para
+ ocultarlos por defecto y marcarlos cuando el filtro es "Todos".*/
+    use RetiradoTrait;
     use CupoEstructuraTrait;
 
-    // Para borrar la foto subida cuando la transacción del alta falla.
-    use FotoSubidaTrait;
-    // Upsert de contacto y dirección de los familiares, compartido con el módulo de empleados.
-    use ContactoDireccionTrait;
+    /**
+ * Indica si el bloque de talla trae algo que guardar; si el wizard no lo
+ * completó no se crea la fila, para no dejar un registro vacío.
+ *
+ * @param array<string, mixed> $talla
+*/
+    private function tieneTalla(array $talla): bool
+    {
+        foreach (['camisa', 'pantalon', 'zapato', 'observaciones'] as $campo) {
+            if (trim((string) ($talla[$campo] ?? '')) !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+ * Indica si el bloque de ficha médica trae algo que guardar.
+ *
+ * Existe el mismo control para la talla (tieneTalla()) y faltaba para la ficha: el
+ * `if (!empty($data['ficha_medica']))` de abajo era SIEMPRE cierto, porque extractData()
+ * arma el arreglo con sus claves puestas a null aunque la secretaria no haya escrito
+ * nada. Resultado: cada inscripción dejaba una ficha médica vacía, y una ficha en
+ * blanco no significa "sin datos" sino "no se registró", que no es lo mismo en un
+ * expediente escolar.
+*/
+    private function tieneFichaMedica(array $ficha): bool
+    {
+        foreach (['condiciones_especiales', 'medicamentos', 'observaciones', 'alergias', 'enfermedades', 'tipo_sangre'] as $campo) {
+            if (trim((string) ($ficha[$campo] ?? '')) !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Combinaciones del año y cupos: inscripción y ratificación leen lo mismo, así el número de la secretaria coincide con el del servidor.
+    
+
+    /* Upsert de contacto y dirección. No lo usa el modelo directamente: lo usa
+ FamiliaresModelTrait al guardar cada familiar, y por eso tiene que estar
+ disponible en la clase que lo consume.*/
+    
 
     protected string $table = 'inscripcion';
     protected string $primaryKey = 'id_inscripcion';
@@ -38,7 +91,8 @@ class InscripcionesModel extends BaseModel implements Listable, Creatable
     {
         [$where, $params] = $this->filters($filters);
 
-        $sql = "SELECT i.id_inscripcion AS id,
+$sql = "SELECT i.id_inscripcion AS id,
+                       i.numero_inscripcion,
                        COALESCE(CONCAT_WS(' ', p.primer_nombre, p.primer_apellido), 'Estudiante') AS nombre,
                        CONCAT(p.tipo_documento, '-', p.numero_documento) AS cedula,
                        UPPER(CONCAT(LEFT(p.primer_nombre, 1), COALESCE(LEFT(p.primer_apellido, 1), ''))) AS iniciales,
@@ -47,6 +101,10 @@ class InscripcionesModel extends BaseModel implements Listable, Creatable
                        COALESCE(s.nombre, 'Sin sección') AS seccion,
                        DATE_FORMAT(m.fecha_matricula, '%d/%m/%Y') AS fecha_inscripcion,
                        'completa' AS estado,
+                       /* Estado derivado, no una columna: es si el alumno tiene fila
+ de retiro. Ver RetiradoTrait. Se resuelve en el SELECT para no
+ consultar por fila.*/
+                       " . self::retiradoSql('m') . " AS es_retirado,
                        COALESCE(a.nombre_periodo, '') AS anio_escolar
                 FROM inscripcion i
                 INNER JOIN matricula m ON m.id_matricula = i.id_matricula
@@ -71,7 +129,8 @@ class InscripcionesModel extends BaseModel implements Listable, Creatable
 
         $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
         foreach ($rows as &$row) {
-            $row['id']          = (int) $row['id'];
+$row['id']          = (int) $row['id'];
+            $row['numero_inscripcion'] = (int) $row['numero_inscripcion'];
             $row['avatar_color'] = 'primary';
             $row['iniciales']   = $row['iniciales'] ?: 'ES';
         }
@@ -98,38 +157,89 @@ class InscripcionesModel extends BaseModel implements Listable, Creatable
         return (int) $stmt->fetchColumn();
     }
 
-    public function getStats(): array
+    /**
+ * Métricas del listado, del AÑO SELECCIONADO.
+ *
+ * Antes leía sola `AniosEscolares::idEnCurso()`, así que al elegir un año pasado
+ * en el selector las tarjetas seguían enseñando los números del año en curso: el
+ * listadoHistorical y su resumen contaban cosas distintas.
+*/
+    public function getStats(?int $idTurno = null, ?int $idAnioEscolar = null): array
     {
-        $inscritosAnio = (int) $this->pdo->query(
+        $idAnio = $idAnioEscolar !== null && $idAnioEscolar > 0
+            ? $idAnioEscolar
+            : AniosEscolares::idEnCurso($this->pdo);
+        $filtroTurno = $idTurno !== null ? ' AND ea.id_turno = :turno' : '';
+        $parametros = ['anio' => $idAnio];
+        if ($idTurno !== null) {
+            $parametros['turno'] = $idTurno;
+        }
+
+        $stmt = $this->pdo->prepare(
             "SELECT COUNT(*) FROM inscripcion i
              INNER JOIN estructura_academica ea ON ea.id_estructura_academica = i.id_estructura_academica
-             INNER JOIN anio_escolar a ON a.id_anio_escolar = ea.id_anio_escolar
-             WHERE a.estado = 'ACTIVO'"
-        )->fetchColumn();
+             WHERE ea.id_anio_escolar = :anio{$filtroTurno}"
+        );
+        $stmt->execute($parametros);
+        $inscritosAnio = (int) $stmt->fetchColumn();
 
         $trendInscritos = 0;
-        $trend = $this->pdo->query(
+        $stmt = $this->pdo->prepare(
             "SELECT
-                COALESCE(SUM(MONTH(m.fecha_matricula) = MONTH(CURDATE())), 0) AS mes_actual,
-                COALESCE(SUM(MONTH(m.fecha_matricula) = MONTH(CURDATE()) - 1), 0) AS mes_anterior
+                COALESCE(SUM(
+                    m.fecha_matricula >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+                    AND m.fecha_matricula < DATE_ADD(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
+                ), 0) AS mes_actual,
+                COALESCE(SUM(
+                    m.fecha_matricula >= DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
+                    AND m.fecha_matricula < DATE_FORMAT(CURDATE(), '%Y-%m-01')
+                ), 0) AS mes_anterior
              FROM inscripcion i
              INNER JOIN matricula m ON m.id_matricula = i.id_matricula
-             WHERE YEAR(m.fecha_matricula) = YEAR(CURDATE())"
-        )->fetch(\PDO::FETCH_ASSOC);
+             INNER JOIN estructura_academica ea ON ea.id_estructura_academica = i.id_estructura_academica
+             WHERE ea.id_anio_escolar = :anio
+               AND m.fecha_matricula >= DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
+               AND m.fecha_matricula < DATE_ADD(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
+               {$filtroTurno}"
+        );
+        $stmt->execute($parametros);
+        $trend = $stmt->fetch(\PDO::FETCH_ASSOC);
+        
         $mesActual  = (int) ($trend['mes_actual'] ?? 0);
         $mesAnterior = (int) ($trend['mes_anterior'] ?? 0);
         if ($mesAnterior > 0) {
             $trendInscritos = (int) round((($mesActual - $mesAnterior) / $mesAnterior) * 100);
         }
 
-        $capacidad = (int) $this->pdo->query('SELECT COALESCE(SUM(capacidad_maxima), 0) FROM estructura_academica')->fetchColumn();
-        $inscritos = (int) $this->pdo->query('SELECT COUNT(*) FROM inscripcion')->fetchColumn();
+        $stmt = $this->pdo->prepare(
+            'SELECT COALESCE(SUM(ea.capacidad_maxima), 0)
+               FROM estructura_academica ea
+              WHERE ea.id_anio_escolar = :anio' . $filtroTurno
+        );
+        $stmt->execute($parametros);
+        $capacidad = (int) $stmt->fetchColumn();
+        $stmt = $this->pdo->prepare(
+            'SELECT COUNT(DISTINCT m.id_estudiante)
+               FROM matricula m
+               INNER JOIN estructura_academica ea ON ea.id_estructura_academica = m.id_estructura_academica
+              WHERE ea.id_anio_escolar = :anio
+                AND ' . Matriculas::condicionCursando('m') . $filtroTurno
+        );
+        $stmt->execute($parametros);
+        $inscritos = (int) $stmt->fetchColumn();
         $cuposDisponibles = max(0, $capacidad - $inscritos);
 
-        $inscripcionesMes = (int) $this->pdo->query(
-            "SELECT COUNT(*) FROM matricula m
-             WHERE MONTH(m.fecha_matricula) = MONTH(CURDATE()) AND YEAR(m.fecha_matricula) = YEAR(CURDATE())"
-        )->fetchColumn();
+        $stmt = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM inscripcion i
+             INNER JOIN matricula m ON m.id_matricula = i.id_matricula
+             INNER JOIN estructura_academica ea ON ea.id_estructura_academica = i.id_estructura_academica
+             WHERE ea.id_anio_escolar = :anio
+               AND m.fecha_matricula >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+               AND m.fecha_matricula < DATE_ADD(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
+               {$filtroTurno}"
+        );
+        $stmt->execute($parametros);
+        $inscripcionesMes = (int) $stmt->fetchColumn();
 
         return [
             'inscritosAnio'    => $inscritosAnio,
@@ -139,7 +249,7 @@ class InscripcionesModel extends BaseModel implements Listable, Creatable
         ];
     }
 
-    /** Listas de strings para los filtros de la tabla. */
+    /** Listas de strings para los filtros de la tabla.*/
     public function getOptions(string $type): array
     {
         switch ($type) {
@@ -154,7 +264,46 @@ class InscripcionesModel extends BaseModel implements Listable, Creatable
         }
     }
 
-    /** Opciones id + nombre para los selects del modal wizard. */
+    /**
+ * Grados y secciones que TIENEN estructura en un año escolar.
+ *
+ * Los filtros de grado y sección se alimentan de aquí y no de getOptions(): el
+ * catálogo de grados y secciones es global, así que con el catálogo a secas el
+ * filtro ofrecería combinaciones que ese año nunca tuvo. Al mirar un año
+ * anterior, solo deben ofrecerse los grados y secciones que de verdad se
+ * impartieron.
+ *
+ * Si el año no tiene estructuras devuelve la lista vacía: no hay nada que
+ * filtrar, y es preferible a ofrecer el catálogo entero.
+ *
+ * @return array<int, string>
+*/
+    public function getGradosSeccionesDelAnio(int $idAnioEscolar, string $tipo): array
+    {
+        $columna = match ($tipo) {
+            'grado'   => 'g.nombre',
+            'seccion' => 's.nombre',
+            default   => null,
+        };
+
+        if ($columna === null || $idAnioEscolar <= 0) {
+            return [];
+        }
+
+        $stmt = $this->pdo->prepare(
+            "SELECT DISTINCT {$columna} AS nombre
+               FROM estructura_academica ea
+               INNER JOIN grado g ON g.id_grado = ea.id_grado
+               INNER JOIN seccion s ON s.id_seccion = ea.id_seccion
+              WHERE ea.id_anio_escolar = :anio
+              ORDER BY nombre"
+        );
+        $stmt->execute(['anio' => $idAnioEscolar]);
+
+        return $stmt->fetchAll(\PDO::FETCH_COLUMN);
+    }
+
+    /** Opciones id + nombre para los selects del modal wizard.*/
     public function getOptionsForModal(string $table): array
     {
         $allowed = [
@@ -170,11 +319,11 @@ class InscripcionesModel extends BaseModel implements Listable, Creatable
     }
 
     /**
-     * Instituciones de procedencia del estudiante: solo etapas del sistema escolar (preescolar o escuela), no una universidad.
-     * Usa App\Support\Instituciones, la misma clase que el wizard de empleados usa para el caso contrario.
-     *
-     * @return array<int, array<string, mixed>>
-     */
+ * Instituciones de procedencia del estudiante: solo etapas del sistema escolar (preescolar o escuela), no una universidad.
+ * Usa App\Support\Instituciones, la misma clase que el wizard de empleados usa para el caso contrario.
+ *
+ * @return array<int, array<string, mixed>>
+*/
     public function getInstituciones(): array
     {
         $marcadores = implode(', ', array_fill(0, count(Instituciones::TIPOS_DE_ESTUDIANTE), '?'));
@@ -192,10 +341,10 @@ class InscripcionesModel extends BaseModel implements Listable, Creatable
     }
 
     /**
-     * Tipos de institución que se pueden registrar desde el wizard de inscripciones: solo los de una etapa del estudiante.
-     *
-     * @return array<int, array<string, mixed>>
-     */
+ * Tipos de institución que se pueden registrar desde el wizard de inscripciones: solo los de una etapa del estudiante.
+ *
+ * @return array<int, array<string, mixed>>
+*/
     public function getTiposInstitucionEstudiante(): array
     {
         return (new InstitucionModel($this->pdo))
@@ -203,18 +352,18 @@ class InscripcionesModel extends BaseModel implements Listable, Creatable
     }
 
     /**
-     * Tipo (código del enum Instituciones) de la institución de procedencia elegida en el paso 2.
-     * El servidor lo necesita para la regla de grado, que varía por tipo: solo la escuela exige un grado anterior de 1 a 6.
-     */
+ * Tipo (código del enum Instituciones) de la institución de procedencia elegida en el paso 2.
+ * El servidor lo necesita para la regla de grado, que varía por tipo: solo la escuela exige un grado anterior de 1 a 6.
+*/
     public function getTipoInstitucion(int $idInstitucion): ?string
     {
         return (new InstitucionModel($this->pdo))->tipoDeInstitucion($idInstitucion);
     }
 
     /**
-     * Nombre del catálogo `grado` de un id, para deducir su número (Instituciones::ordinalGrado).
-     * No se compara por id porque los ids del catálogo no siguen el orden de los grados.
-     */
+ * Nombre del catálogo `grado` de un id, para deducir su número (Instituciones::ordinalGrado).
+ * No se compara por id porque los ids del catálogo no siguen el orden de los grados.
+*/
     public function getNombreGrado(int $idGrado): ?string
     {
         $stmt = $this->pdo->prepare(
@@ -226,196 +375,131 @@ class InscripcionesModel extends BaseModel implements Listable, Creatable
         return $nombre === false ? null : (string) $nombre;
     }
 
-    /** Parentescos, niveles de instrucción y ocupaciones para el sub-modal de familiares. */
+    /**
+     * Nacionalidades para el <select> del paso 1 del estudiante.
+     *
+     * Va aparte de getFamiliarCatalogs() a propósito: ese método arma el sub-modal de
+     * familiares, que no lleva nacionalidad, y meterla ahí mezclaría dos formularios
+     * que no se parecen. Trae `id_por_defecto` porque el campo del estudiante arranca
+     * en Venezolano en vez de en "Seleccione".
+     *
+     * @return array{nacionalidades:array<int,array<string,mixed>>,id_por_defecto:int}
+     */
+    public function getNacionalidades(): array
+    {
+        return [
+            'nacionalidades' => $this->pdo->query("SELECT id_nacionalidad, nombre FROM nacionalidad
+                                                    WHERE estado = 'ACTIVO' ORDER BY nombre")
+                                     ->fetchAll(\PDO::FETCH_ASSOC),
+            'id_por_defecto'  => (int) \App\Models\NacionalidadModel::ID_POR_DEFECTO,
+        ];
+    }
+
+    /** Parentescos, niveles de instrucción y ocupaciones para el sub-modal de familiares.*/
     public function getFamiliarCatalogs(): array
     {
         return [
-            'parentescos'        => $this->pdo->query("SELECT id_parentesco AS id, nombre FROM parentesco WHERE estado = 'ACTIVO' ORDER BY nombre")->fetchAll(\PDO::FETCH_ASSOC),
-            'nivelInstruccion'   => $this->pdo->query("SELECT id_nivel_instruccion AS id, nombre FROM nivel_instruccion WHERE estado = 'ACTIVO' ORDER BY nombre")->fetchAll(\PDO::FETCH_ASSOC),
-            'ocupaciones'        => $this->pdo->query("SELECT id_ocupacion AS id, nombre FROM ocupacion WHERE estado = 'ACTIVO' ORDER BY nombre")->fetchAll(\PDO::FETCH_ASSOC),
+            'parentescos'         => $this->pdo->query("SELECT nombre FROM parentesco WHERE estado = 'ACTIVO' ORDER BY nombre")->fetchAll(\PDO::FETCH_COLUMN),
+            'niveles_instruccion' => $this->pdo->query("SELECT nombre FROM nivel_instruccion WHERE estado = 'ACTIVO' ORDER BY nombre")->fetchAll(\PDO::FETCH_COLUMN),
+            'ocupaciones'         => $this->pdo->query("SELECT nombre FROM ocupacion WHERE estado = 'ACTIVO' ORDER BY nombre")->fetchAll(\PDO::FETCH_COLUMN),
         ];
     }
 
     /**
-     * Estados para el <select> de la cascada de dirección del familiar; municipio y parroquia llegan por AJAX porque son catálogos grandes.
-     *
-     * @return array<int, array<string, mixed>>
-     */
+ * Estados para el <select> de la cascada de dirección del familiar; municipio y parroquia llegan por AJAX porque son catálogos grandes.
+ *
+ * @return array<int, array<string, mixed>>
+*/
     public function getEstados(): array
     {
         return $this->pdo->query("SELECT id_estado, nombre FROM estado WHERE estado = 'ACTIVO' ORDER BY nombre")
                          ->fetchAll(\PDO::FETCH_ASSOC);
     }
 
-    /** Parroquias activas para el paso de dirección del wizard. */
+    /** Parroquias activas para el paso de dirección del wizard.*/
     public function getParroquias(): array
     {
         return $this->pdo->query("SELECT id_parroquia AS id, nombre FROM parroquia WHERE estado = 'ACTIVO' ORDER BY nombre")
                          ->fetchAll(\PDO::FETCH_ASSOC);
     }
 
-    /** ¿Ya existe un estudiante con ese número de documento? */
+    /* ¿Ese documento ya está en el sistema? Consulta `persona` y NO `estudiante`, a propósito:
+ preguntar solo por `estudiante` dejaba pasar a quien ya tuviera ficha sin ser alumno, como
+ un docente o el representante de otro alumno. La inscripción comparte la tabla `persona`.*/
     public function existeDocumento(string $documento): bool
     {
         if (trim($documento) === '') {
             return false;
         }
         $stmt = $this->pdo->prepare(
-            "SELECT e.id_estudiante
-             FROM estudiante e
-             INNER JOIN persona p ON p.id_persona = e.id_persona
-             WHERE p.numero_documento = :doc LIMIT 1"
+            'SELECT 1 FROM persona WHERE numero_documento = :doc LIMIT 1'
         );
         $stmt->execute(['doc' => trim($documento)]);
-        return (bool) $stmt->fetchColumn();
+        return $stmt->fetchColumn() !== false;
     }
 
     /**
-     * Devuelve el id de la persona del familiar, creándola solo si su documento es nuevo.
-     * Un representante con varios hijos no debe duplicarse en `persona` (el UNIQUE de numero_documento lo rechazaría);
-     * si ya existe se reutiliza sin tocar sus datos personales, y solo se actualizan contacto y domicilio con los upsert de abajo.
-     *
-     * @param array $nombres primer_nombre, segundo_nombre, primer_apellido, segundo_apellido.
-     */
-    private function buscarOCrearPersonaFamiliar(
-        string $tipoDocumento,
-        string $documento,
-        array $nombres,
-        string $sexo,
-        string $fechaNacimiento
-    ): int {
-        $fechaNacimiento = $this->normalizarFechaNacimiento($fechaNacimiento);
-
-        $stmt = $this->pdo->prepare('SELECT id_persona FROM persona WHERE numero_documento = :documento LIMIT 1');
-        $stmt->execute(['documento' => $documento]);
-        $existente = (int) $stmt->fetchColumn();
-
-        // En un alta nueva la fecha es obligatoria (columna NOT NULL) y no se inventa una de relleno.
-        if ($existente === 0 && $fechaNacimiento === '') {
-            throw new InvalidArgumentException(
-                'Indique la fecha de nacimiento del familiar.'
-            );
-        }
-
-        // Una persona existente se reutiliza tal cual: cambiar sus nombres, sexo o fecha desde aquí dejaría registros inconsistentes.
-        if ($existente > 0) {
-            return $existente;
-        }
-
-        $this->pdo->prepare(
-            "INSERT INTO persona (tipo_documento, numero_documento, fecha_nacimiento,
-             primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, sexo, estado)
-             VALUES (:tipo, :documento, :fecha_nacimiento,
-             :primer_nombre, :segundo_nombre, :primer_apellido, :segundo_apellido, :sexo, 'ACTIVO')"
-        )->execute([
-            'tipo'              => $tipoDocumento,
-            'documento'         => $documento,
-            'fecha_nacimiento'  => $fechaNacimiento,
-            'primer_nombre'     => $nombres['primer_nombre'],
-            'segundo_nombre'    => $nombres['segundo_nombre'] ?: null,
-            'primer_apellido'   => $nombres['primer_apellido'],
-            'segundo_apellido'  => $nombres['segundo_apellido'] ?: null,
-            'sexo'              => $sexo,
-        ]);
-
-        return (int) $this->pdo->lastInsertId();
-    }
-
-    /**
-     * Busca una persona por documento para el sub-modal de familiares, para que el wizard cargue sus datos si ya está registrada.
-     * Devuelve null si no existe; si existe, nombres, sexo, contacto, domicilio y cuántos estudiantes representa.
-     * La cédula se normaliza (App\Support\Documento) para que "V-12.345.678" encuentre a la misma persona que "12345678".
-     */
-    public function buscarPersonaPorDocumento(string $documento): ?array
+ * Por qué ese documento no se puede usar para una inscripción, o null si no está en uso.
+ *
+ * Los tres casos se responden distinto porque la secretaria tiene que saber a qué
+ * módulo acudir: un alumno que ya existe se ratifica, un docente o empleado no se
+ * inscribe desde aquí, y un familiar tampoco.
+*/
+    public function descripcionDocumentoExistente(string $documento): ?string
     {
-        $documento = Documento::normalizar($documento);
-
+        $documento = trim($documento);
         if ($documento === '') {
             return null;
         }
 
         $stmt = $this->pdo->prepare(
-            "SELECT p.id_persona, p.tipo_documento, p.numero_documento, p.fecha_nacimiento,
-                    p.primer_nombre, p.segundo_nombre, p.primer_apellido, p.segundo_apellido, p.sexo
-             FROM persona p
-             WHERE p.numero_documento = :documento
-             LIMIT 1"
+            'SELECT id_persona FROM persona WHERE numero_documento = :doc LIMIT 1'
         );
-        $stmt->execute(['documento' => $documento]);
-        $persona = $stmt->fetch(\PDO::FETCH_ASSOC);
-
-        if (!$persona) {
+        $stmt->execute(['doc' => $documento]);
+        $idPersona = $stmt->fetchColumn();
+        if ($idPersona === false) {
             return null;
         }
 
-        $id = (int) $persona['id_persona'];
-
         $stmt = $this->pdo->prepare(
-            'SELECT codigo_telefono_principal, numero_telefono_principal,
-                    codigo_telefono_alternativo, numero_telefono_alternativo, correo_electronico
-             FROM contacto WHERE id_persona = :id LIMIT 1'
+            'SELECT 1 FROM estudiante WHERE id_persona = :persona LIMIT 1'
         );
-        $stmt->execute(['id' => $id]);
-        $contacto = $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
-
-        $stmt = $this->pdo->prepare(
-            'SELECT d.sector_urbanizacion, d.calle_avenida, d.nro_casa_apto, d.punto_referencia, d.id_parroquia
-             FROM direccion d WHERE d.id_persona = :id LIMIT 1'
-        );
-        $stmt->execute(['id' => $id]);
-        $direccion = $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
-
-        // `direccion` solo guarda id_parroquia: estado y municipio se deducen de ella para dejar la cascada completa.
-        if ($direccion) {
-            $ubicacion = (new UbicacionModel($this->pdo))->ubicacionDeParroquia((int) $direccion['id_parroquia']);
-            $direccion['id_estado']   = $ubicacion['estado'] ?? 0;
-            $direccion['id_municipio'] = $ubicacion['municipio'] ?? 0;
+        $stmt->execute(['persona' => (int) $idPersona]);
+        if ($stmt->fetchColumn() !== false) {
+            return 'Ya existe un estudiante con ese número de documento; '
+                . 'lo que corresponde es ratificarlo, no inscribirlo de nuevo.';
         }
 
         $stmt = $this->pdo->prepare(
-            'SELECT COUNT(*) FROM persona_estudiante WHERE id_persona = :id AND es_representante_legal = 1'
+            'SELECT 1 FROM empleado WHERE id_persona = :persona LIMIT 1'
         );
-        $stmt->execute(['id' => $id]);
+        $stmt->execute(['persona' => (int) $idPersona]);
+        if ($stmt->fetchColumn() !== false) {
+            return 'Ese número de documento ya está registrado como empleado o docente de la institución. '
+                . 'Un empleado no se inscribe como estudiante: revise el registro del empleado.';
+        }
 
-        return [
-            'persona' => [
-                'tipo_documento'   => $persona['tipo_documento'],
-                'numero_documento' => $persona['numero_documento'],
-                'primer_nombre'    => $persona['primer_nombre'] ?? '',
-                'segundo_nombre'   => $persona['segundo_nombre'] ?? '',
-                'primer_apellido'  => $persona['primer_apellido'] ?? '',
-                'segundo_apellido' => $persona['segundo_apellido'] ?? '',
-                'sexo'             => $persona['sexo'] ?? 'M',
-                'fecha_nacimiento' => $persona['fecha_nacimiento'] ?? '',
-            ],
-            'contacto' => $contacto === null ? null : [
-                'codigo'     => $contacto['codigo_telefono_principal'] ?? '',
-                'numero'     => $contacto['numero_telefono_principal'] ?? '',
-                'codigo_alt' => $contacto['codigo_telefono_alternativo'] ?? '',
-                'numero_alt' => $contacto['numero_telefono_alternativo'] ?? '',
-                'correo'     => $contacto['correo_electronico'] ?? '',
-            ],
-            'direccion' => $direccion === null ? null : [
-                'sector'     => $direccion['sector_urbanizacion'] ?? '',
-                'calle'      => $direccion['calle_avenida'] ?? '',
-                'casa'       => $direccion['nro_casa_apto'] ?? '',
-                'referencia' => $direccion['punto_referencia'] ?? '',
-                'parroquia'  => (int) ($direccion['id_parroquia'] ?? 0),
-                // Estado y municipio deducidos de la parroquia, para dejar los tres niveles elegidos.
-                'estado'     => (int) ($direccion['id_estado'] ?? 0),
-                'municipio'  => (int) ($direccion['id_municipio'] ?? 0),
-            ],
-            'representante_de' => (int) $stmt->fetchColumn(),
-        ];
+        return 'Ese número de documento ya está registrado en el sistema como persona. '
+            . 'La inscripción es solo para estudiantes nuevos que nunca han pertenecido al plantel.';
     }
 
     /**
-     * Orden del próximo hijo de un representante legal, para la cédula escolar [letra][orden][año][7 dígitos del representante].
-     * Se deduce contando los hijos del representante con el mismo AÑO de nacimiento (no fecha completa, porque la cédula lleva solo 2 dígitos del año),
-     * incluidos los ya inactivos, para que el orden no cambie si un hermano se gradúa o se retira.
-     *
-     * @param string $cedulaRepresentante Cédula del representante (con o sin letra), porque el familiar del wizard aún no está en la base.
-     */
+ * Busca una persona por documento para el sub-modal de familiares, para que el wizard cargue sus datos si ya está registrada.
+ * Devuelve null si no existe; si existe, nombres, sexo, contacto, domicilio y cuántos estudiantes representa.
+ * La cédula se normaliza (App\Support\Documento) para que "V-12.345.678" encuentre a la misma persona que "12345678".
+*/
+    public function buscarPersonaPorDocumento(string $documento, ?int $idEstudiante = null): ?array
+    {
+        return (new PersonaModel($this->pdo))->buscarPersonaPorDocumento($documento, $idEstudiante);
+    }
+
+    /**
+ * Orden del próximo hijo de un representante legal, para la cédula escolar [letra][orden][año][7 dígitos del representante].
+ * Se deduce contando los hijos del representante con el mismo AÑO de nacimiento (no fecha completa, porque la cédula lleva solo 2 dígitos del año),
+ * incluidos los ya inactivos, para que el orden no cambie si un hermano se gradúa o se retira.
+ *
+ * @param string $cedulaRepresentante Cédula del representante (con o sin letra), porque el familiar del wizard aún no está en la base.
+*/
     public function proximoOrdenHermano(string $cedulaRepresentante, string $fechaNacimiento): int
     {
         // persona.numero_documento se guarda solo con dígitos; sin normalizar el conteo saldría en cero y dos hermanos tendrían orden 1.
@@ -447,27 +531,7 @@ class InscripcionesModel extends BaseModel implements Listable, Creatable
         return ((int) $stmt->fetchColumn()) + 1;
     }
 
-    /** Un segundo nombre/apellido, o null si no se escribió. */
-    private function segundoNombre(string $valor): ?string
-    {
-        $valor = trim($valor);
-
-        return $valor === '' ? null : mb_substr($valor, 0, 50);
-    }
-
-    /**
-     * Una fecha de nacimiento en Y-m-d, o '' si no vino ninguna utilizable.
-     * No inventa una fecha: persona.fecha_nacimiento es NOT NULL y una falsa deja basura difícil de detectar.
-     */
-    private function normalizarFechaNacimiento(string $fecha): string
-    {
-        $fecha = trim($fecha);
-        $corte = \DateTimeImmutable::createFromFormat('!Y-m-d', $fecha);
-
-        return $corte !== false && $corte->format('Y-m-d') === $fecha ? $fecha : '';
-    }
-
-    /** Año escolar activo para el paso 3 del wizard (solo lectura). */
+    /** Año escolar activo para el paso 3 del wizard (solo lectura).*/
     public function getAnioActivo(): array
     {
         $stmt = $this->pdo->query(
@@ -479,17 +543,17 @@ class InscripcionesModel extends BaseModel implements Listable, Creatable
     }
 
     /**
-     * Datos del paso 3 (Académico) del wizard; las opciones salen de `estructura_academica` y no del catálogo,
-     * así solo se ofrecen las combinaciones registradas para el año activo.
-     * Cada combinación trae lo ocupado y lo que queda, para mostrar deshabilitado el turno lleno.
-     *
-     * @return array{anio:array<string,mixed>, grados:array, secciones:array,
-     *               turnos:array, combinaciones:array}
-     */
-    public function opcionesPasoAcademico(): array
+ * Datos del paso 3 (Académico) del wizard; las opciones salen de `estructura_academica` y no del catálogo,
+ * así solo se ofrecen las combinaciones registradas para el año activo.
+ * Cada combinación trae lo ocupado y lo que queda, para mostrar deshabilitado el turno lleno.
+ *
+ * @return array{anio:array<string,mixed>, grados:array, secciones:array,
+ * turnos:array, combinaciones:array}
+*/
+    public function opcionesPasoAcademico(?int $idTurno = null): array
     {
         $anio     = $this->getAnioActivo();
-        $opciones = $this->opcionesAcademicas((int) $anio['id']);
+        $opciones = $this->opcionesAcademicas((int) $anio['id'], $idTurno);
 
         return [
             'anio'          => $anio,
@@ -501,19 +565,51 @@ class InscripcionesModel extends BaseModel implements Listable, Creatable
     }
 
     /**
-     * La combinación grado + sección + turno del año con su disponibilidad, o null si no está registrada (ver CupoEstructuraTrait).
-     *
-     * @return array<string, mixed>|null
-     */
+ * La combinación grado + sección + turno del año con su disponibilidad, o null si no está registrada (ver CupoEstructuraTrait).
+ *
+ * @return array<string, mixed>|null
+*/
     public function combinacionDeGradoSeccionTurno(int $idGrado, int $idSeccion, int $idTurno, int $idAnioEscolar): ?array
     {
         return $this->combinacionConCupo($idGrado, $idSeccion, $idTurno, $idAnioEscolar);
     }
 
+/**
+ * Folio de inscripción siguiente dentro de un año escolar: 1, 2, 3... y vuelve a 1 en el año nuevo.
+ *
+ * Es un consecutivo de negocio, no el `id_inscripcion`: ese es un AUTO_INCREMENT técnico que deja huecos
+ * (si se borra una inscripción, el siguiente número salta) y nunca se reinicia, así que no sirve como folio
+ * para citar en un documento. El UNIQUE (id_anio_escolar, numero_inscripcion) es lo que garantiza que no se repita.
+ *
+ * El FOR UPDATE sobre la fila del año serializa a las secretarias: sin él, dos inscripciones simultáneas del
+ * mismo año leerían el mismo MAX() y el INSERT de la segunda moriría con duplicate key (1062).
+ * El orden de bloqueos es estructura (reservarCupo, antes) y luego año (aquí), y ningún otro camino del
+ * proyecto bloquea el año, así que ese orden no se cruza con nadie.
+ *
+ * @throws \RuntimeException si el año escolar indicado no existe.
+*/
+    private function siguienteFolio(int $idAnioEscolar): int
+    {
+        $lock = $this->pdo->prepare(
+            'SELECT id_anio_escolar FROM anio_escolar WHERE id_anio_escolar = :anio FOR UPDATE'
+        );
+        $lock->execute(['anio' => $idAnioEscolar]);
+        if ($lock->fetchColumn() === false) {
+            throw new \RuntimeException('El año escolar de la inscripción no existe.');
+        }
+
+        $max = $this->pdo->prepare(
+            'SELECT COALESCE(MAX(numero_inscripcion), 0) FROM inscripcion WHERE id_anio_escolar = :anio'
+        );
+        $max->execute(['anio' => $idAnioEscolar]);
+
+        return (int) $max->fetchColumn() + 1;
+    }
+
     /**
-     * Crea una inscripción completa en una transacción: persona, estudiante, matrícula, inscripción y, opcionalmente,
-     * talla, ficha médica y familiares. Recibe los datos ya normalizados por el controlador y relanza cualquier error tras el rollback.
-     */
+ * Crea una inscripción completa en una transacción: persona, estudiante, matrícula, inscripción y, opcionalmente,
+ * talla, ficha médica y familiares. Recibe los datos ya normalizados por el controlador y relanza cualquier error tras el rollback.
+*/
     public function create(array $data): bool
     {
         // La foto llega en $data['foto'] (ver extractData() del controlador); el resto de la persona va en $data['persona'].
@@ -524,8 +620,8 @@ class InscripcionesModel extends BaseModel implements Listable, Creatable
             $this->pdo->beginTransaction();
 
             /* 0. Se bloquea la estructura antes de escribir o leer nada: matricula tiene FK contra ella y su INSERT toma un lock compartido,
-               así que un FOR UPDATE posterior lo subiría a exclusivo y varias secretarias a la vez caerían en deadlock (1213).
-               Además, en REPEATABLE READ una lectura previa fija la foto de la transacción y el conteo de cupos saldría viejo. */
+ así que un FOR UPDATE posterior lo subiría a exclusivo y varias secretarias a la vez caerían en deadlock (1213).
+ Además, en REPEATABLE READ una lectura previa fija la foto de la transacción y el conteo de cupos saldría viejo.*/
             $estructuraId = (int) ($data['id_estructura_academica'] ?? 0);
             if ($estructuraId <= 0) {
                 throw new \RuntimeException('Debe seleccionar una estructura académica válida.');
@@ -536,25 +632,35 @@ class InscripcionesModel extends BaseModel implements Listable, Creatable
                 throw new \RuntimeException('La estructura académica seleccionada no tiene un año escolar válido.');
             }
 
-            // 1. Persona + estudiante (el wizard siempre registra estudiante nuevo)
+    /* GUARDIA DE ESCRITURA SOBRE UN AÑO CERRADO. Se comprueba el año de la ESTRUCTURA elegida,
+ que es donde se va a escribir, y no "el que esté activo": con lo anterior bastaba que
+ existiera ALGÚN año activo para poder escribir, y se podía mandar a mano un id de
+ estructura de un período cerrado.*/
             $stmt = $this->pdo->prepare(
-                "INSERT INTO persona (tipo_documento, numero_documento, fecha_nacimiento,
-                 primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, sexo, estado, foto)
-                 VALUES (:tipo_documento, :numero_documento, :fecha_nacimiento,
-                 :primer_nombre, :segundo_nombre, :primer_apellido, :segundo_apellido, :sexo, 'ACTIVO', :foto)"
+                'SELECT nombre_periodo, estado
+                   FROM anio_escolar
+                  WHERE id_anio_escolar = :anio
+                  FOR UPDATE'
             );
-            $stmt->execute([
-                'tipo_documento'   => $persona['tipo_documento'],
-                'numero_documento' => mb_substr((string) $persona['numero_documento'], 0, 20),
-                'fecha_nacimiento' => $persona['fecha_nacimiento'],
-                'primer_nombre'    => mb_substr((string) $persona['primer_nombre'], 0, 50),
-                'segundo_nombre'   => mb_substr((string) ($persona['segundo_nombre'] ?? ''), 0, 50) ?: null,
-                'primer_apellido'  => mb_substr((string) $persona['primer_apellido'], 0, 50),
-                'segundo_apellido' => mb_substr((string) ($persona['segundo_apellido'] ?? ''), 0, 50) ?: null,
-                'sexo'             => $persona['sexo'],
-                'foto'             => $persona['foto'] ?? null,
-            ]);
-            $personaId = (int) $this->pdo->lastInsertId();
+            $stmt->execute(['anio' => $anioEscolar]);
+            $anio = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+            if (!$anio) {
+                throw new \RuntimeException('El año escolar de la estructura seleccionada no existe.');
+            }
+
+            if (strtoupper((string) $anio['estado']) !== 'ACTIVO') {
+                throw new AnioEscolarCerradoException(
+                    'El año escolar ' . $anio['nombre_periodo'] . ' está cerrado y es solo de consulta. '
+                    . 'No se pueden registrar inscripciones en un período cerrado.'
+                );
+            }
+
+            // 1. Persona + estudiante (el wizard siempre registra estudiante nuevo)
+            // crear() y no buscarOCrear(): la persona tiene que ser nueva. Reutilizar una existente
+            // (un docente, un empleado, el representante de otro alumno) dejaría la misma persona
+            // con dos fichas y su documento solo podría pertenecer a una.
+            $personaModel = new PersonaModel($this->pdo);$personaId = $personaModel->crear($persona);
 
             $this->pdo->prepare('INSERT INTO estudiante (id_persona) VALUES (:persona)')
                       ->execute(['persona' => $personaId]);
@@ -564,21 +670,9 @@ class InscripcionesModel extends BaseModel implements Listable, Creatable
             // El wizard no manda fecha: la matrícula se registra con la del día.
             $fecha = ($data['fecha_matricula'] ?? '') ?: date('Y-m-d');
 
-            // La estructura se valida antes de insertar la matrícula porque es dato obligatorio de la fila (año y sección donde cursa).
-            $estructuraId = (int) ($data['id_estructura_academica'] ?? 0);
-            if ($estructuraId <= 0) {
-                throw new \RuntimeException('Debe seleccionar una estructura académica válida.');
-            }
-            $stmt = $this->pdo->prepare('SELECT id_anio_escolar FROM estructura_academica WHERE id_estructura_academica = :id');
-            $stmt->execute(['id' => $estructuraId]);
-            $anioEscolar = (int) ($stmt->fetchColumn() ?: 0);
-            if ($anioEscolar <= 0) {
-                throw new \RuntimeException('La estructura académica seleccionada no tiene un año escolar válido.');
-            }
-
             /* Primer ingreso: sin historial solo se entra por INSCRIPCION (tipo fijado por App\Support\Matriculas) y nunca se repite.
-               La llave única (estudiante, año, tipo) no frena una segunda INSCRIPCION en un año nuevo,
-               así que se comprueba que no exista ninguna matrícula previa. */
+ La llave única (estudiante, año, tipo) no frena una segunda INSCRIPCION en un año nuevo,
+ así que se comprueba que no exista ninguna matrícula previa.*/
             $previas = $this->pdo->prepare(
                 'SELECT tipo, id_anio_escolar FROM matricula WHERE id_estudiante = :e ORDER BY id_anio_escolar DESC LIMIT 1'
             );
@@ -612,28 +706,36 @@ class InscripcionesModel extends BaseModel implements Listable, Creatable
                 throw new \RuntimeException('No hay instituciones registradas para completar la inscripción.');
             }
 
+// El folio se pide después de reservar el cupo: el año ya está resuelto arriba y el bloqueo de la
+            // estructura ya está tomado, que es el orden que evita el deadlock que comenta el paso 0.
+            $folio = $this->siguienteFolio($anioEscolar);
+
             $this->pdo->prepare(
-                'INSERT INTO inscripcion (id_matricula, id_estudiante, id_estructura_academica, ult_grado_cursado,
+                'INSERT INTO inscripcion (id_matricula, id_estudiante, id_estructura_academica, id_anio_escolar,
+                 numero_inscripcion, ult_grado_cursado,
                  es_primer_ingreso, motivo_egreso, anio_escolar_pre, id_institucion)
-                 VALUES (:matricula, :estudiante, :estructura, :ult_grado, :primer_ingreso, :motivo, :anio_pre, :institucion)'
+                 VALUES (:matricula, :estudiante, :estructura, :anio, :folio, :ult_grado,
+                 :primer_ingreso, :motivo, :anio_pre, :institucion)'
             )->execute([
                 'matricula'      => $matriculaId,
                 'estudiante'     => $estudianteId,
                 'estructura'     => $estructuraId,
+                'anio'           => $anioEscolar,
+                'folio'          => $folio,
                 'ult_grado'      => mb_substr((string) ($data['ult_grado_cursado'] ?? ''), 0, 20) ?: null,
                 /* `es_primer_ingreso` es un dato de procedencia ("Primera vez" o "Traslado"), no de proceso; no depende de que la inscripción sea única.
-                   Los que vienen de otro colegio llenan ult_grado_cursado, anio_escolar_pre y motivo_egreso.
-                   El default espeja el de la columna; el controlador siempre manda el dato (el checkbox sin marcar lo traduce a 0). */
+ Los que vienen de otro colegio llenan ult_grado_cursado, anio_escolar_pre y motivo_egreso.
+ El default espeja el de la columna; el controlador siempre manda el dato (el checkbox sin marcar lo traduce a 0).*/
                 'primer_ingreso' => (int) ($data['es_primer_ingreso'] ?? 1),
                 'motivo'         => mb_substr((string) ($data['motivo_egreso'] ?? ''), 0, 100) ?: null,
                 'anio_pre'       => mb_substr((string) ($data['anio_escolar_pre'] ?? ''), 0, 9) ?: null,
                 'institucion'    => $idInstitucion,
             ]);
-            $inscripcionId = (int) $this->pdo->lastInsertId();
+            $inscripcionId = (int)$this->pdo->lastInsertId();
 
             // 4. Talla uniforme (opcional). El estudiante es menor: su contacto y dirección van con el representante, en insertFamiliares().
             if ($this->tieneTalla($data['talla_uniforme'] ?? [])) {
-                $talla = $data['talla_uniforme'];
+                $talla =$data['talla_uniforme'];
                 // UNIQUE en id_estudiante: un reingreso actualiza la talla en vez de fallar.
                 // Las tres tallas son NOT NULL y fecha_actualizacion no tiene default (de ahí '' y CURDATE()).
                 $this->pdo->prepare(
@@ -655,8 +757,7 @@ class InscripcionesModel extends BaseModel implements Listable, Creatable
             }
 
             // 5. Ficha médica (opcional)
-            if (!empty($data['ficha_medica'])) {
-                $this->pdo->prepare(
+            if ($this->tieneFichaMedica((array) ($data['ficha_medica'] ?? []))) {$this->pdo->prepare(
                     "INSERT INTO ficha_medica (id_estudiante, condiciones_especiales, medicamentos,
                      observaciones, alergias, enfermedades, tipo_sangre, fecha_actualizacion)
                      VALUES (:estudiante, :condiciones, :medicamentos, :observaciones, :alergias, :enfermedades, :sangre, CURDATE())"
@@ -671,32 +772,69 @@ class InscripcionesModel extends BaseModel implements Listable, Creatable
                 ]);
             }
 
-            /* 6. Familiares: ya no es best-effort; si algún familiar no declara parentesco sin ser "no es familiar",
-               se lanza DatoFamiliarIncompletoException y create() hace rollBack. */
-            $this->insertFamiliares($estudianteId, $data['familiares'] ?? []);
+            /* 6. Recaudos que entregó el representante. Antes esta información se mostraba en el
+ paso 5 del asistente y se perdía al guardar: la tabla estudiante_documento
+ estaba creada para esto y nunca se escribió. Van todos los recaudos del
+ catálogo, no solo los marcados, para que quede la lista de lo que se pidió en
+ esa inscripción y se pueda mostrar lo que falta.*/
+            $this->guardarRecaudos($estudianteId, $data['recaudos'] ?? []);
+
+            /* 7. Familiares: ya no es best-effort; si algún familiar no declara parentesco sin ser "no es familiar",
+ se lanza DatoFamiliarIncompletoException y create() hace rollBack.*/
+            $this->guardarFamiliares($estudianteId, $data['familiares'] ?? []);
+
+            /* Se audita antes del commit y en la misma conexión: si el commit fallara, el
+ rollback también deshace la bitácora, y nunca queda constancia de una
+ inscripción que no ocurrió. El id del usuario lo pasa el controlador.*/
+            $idUsuario = (int) ($data['id_usuario'] ?? 0);
+            if ($idUsuario > 0) {
+                (new BitacoraModel($this->pdo))->registrar(
+                    $idUsuario,
+                    'INSCRIPCIÓN ' . trim((string) $this->descripcionEstudiante($estudianteId))
+                        . ' · ' . (string) $disponibilidad['nombre'],
+                    'Inscripciones'
+                );
+            }
 
             $this->pdo->commit();
 
             return true;
         } catch (Throwable $e) {
-            if ($this->pdo->inTransaction()) {
-                $this->pdo->rollBack();
+            if ($this->pdo->inTransaction()) {$this->pdo->rollBack();
             }
-            // La fila no se guardó: se elimina la foto subida para no dejar archivos huérfanos (mismo criterio que EmpleadoController).
-            $this->borrarFoto($data['foto'] ?? null);
             error_log('InscripcionesModel::create(): ' . $e->getMessage());
             throw $e;
         }
     }
 
-    /** Detalle de una inscripción para la vista "ver". */
+    /** Nombre y cédula de un estudiante, para que la bitácora se lea sin consultar la ficha.*/
+    private function descripcionEstudiante(int $estudianteId): string
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT p.primer_nombre, p.primer_apellido, p.numero_documento
+               FROM estudiante e
+               INNER JOIN persona p ON p.id_persona = e.id_persona
+              WHERE e.id_estudiante = :id
+              LIMIT 1'
+        );
+        $stmt->execute(['id' => $estudianteId]);
+        $fila = $stmt->fetch(\PDO::FETCH_ASSOC);
+        if (!$fila) {
+            return "estudiante {$estudianteId}";
+        }
+
+        return trim($fila['primer_nombre'] . ' ' . $fila['primer_apellido'])
+            . ' (' . $fila['numero_documento'] . ')';
+    }
+
+    /** Detalle de una inscripción para la vista "ver".*/
     public function getById(int $id): ?array
     {
-        $sql = "SELECT i.id_inscripcion AS id, i.es_primer_ingreso, i.ult_grado_cursado, i.motivo_egreso, i.anio_escolar_pre,
+        $sql = "SELECT i.id_inscripcion AS id, i.numero_inscripcion, i.es_primer_ingreso, i.ult_grado_cursado, i.motivo_egreso, i.anio_escolar_pre,
                        CONCAT(p.tipo_documento, '-', p.numero_documento) AS cedula,
-                       CONCAT_WS(' ', p.primer_nombre, p.segundo_nombre, p.primer_apellido, p.segundo_apellido) AS nombre,
+                       p.primer_nombre, p.segundo_nombre, p.primer_apellido, p.segundo_apellido,
                        DATE_FORMAT(m.fecha_matricula, '%d/%m/%Y') AS fecha_inscripcion,
-                       g.nombre AS grado, s.nombre AS seccion, t.nombre AS turno, a.nombre_periodo AS anio_escolar,
+                       g.nombre AS grado, s.nombre AS seccion, t.nombre AS turno, ea.id_turno, a.nombre_periodo AS anio_escolar,
                        UPPER(CONCAT(LEFT(p.primer_nombre, 1), COALESCE(LEFT(p.primer_apellido, 1), ''))) AS iniciales,
                        p.foto AS avatar_img
                 FROM inscripcion i
@@ -711,307 +849,130 @@ class InscripcionesModel extends BaseModel implements Listable, Creatable
                 WHERE i.id_inscripcion = :id";
 
         $stmt = $this->pdo->prepare($sql);
-        $stmt->execute(['id' => $id]);
-        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        $stmt->execute(['id' =>$id]);
+        $row =$stmt->fetch(\PDO::FETCH_ASSOC);
         if (!$row) {
             return null;
-        }
-        $row['id'] = (int) $row['id'];
+        }$row['id'] = (int) $row['id'];
+        $row['numero_inscripcion'] = (int) $row['numero_inscripcion'];
         $row['avatar_color'] = 'primary';
-        $row['iniciales'] = $row['iniciales'] ?: 'ES';
+        $row['iniciales'] =$row['iniciales'] ?: 'ES';
         return $row;
     }
 
     /**
-     * Indica si el bloque de talla trae algo que guardar; si el wizard no lo completó no se crea la fila, para no dejar un registro vacío.
-     *
-     * @param array<string, mixed> $talla
-     */
-    private function tieneTalla(array $talla): bool
-    {
-        foreach (['camisa', 'pantalon', 'zapato', 'observaciones'] as $campo) {
-            if (trim((string) ($talla[$campo] ?? '')) !== '') {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Contacto del familiar, contra la persona recién registrada: traduce los nombres cortos del wizard (codigo, numero, codigo_alt...) a columnas
-     * y delega el upsert en ContactoDireccionTrait (el mismo de EmpleadoModel).
-     * Sin teléfono principal no se escribe nada, porque es obligatorio para cualquier familiar; su validez la revisa ContactoValidacionTrait en el controlador.
-     */
-    private function upsertContactoPersona(int $personaId, array $contacto): void
-    {
-        $codigo = trim((string) ($contacto['codigo'] ?? ''));
-        $numero = trim((string) ($contacto['numero'] ?? ''));
-
-        if ($codigo === '' || $numero === '') {
-            return;
-        }
-
-        $this->guardarContacto($personaId, [
-            'codigo_telefono_principal'   => $codigo,
-            'numero_telefono_principal'   => $numero,
-            'codigo_telefono_alternativo' => $contacto['codigo_alt'] ?? '',
-            'numero_telefono_alternativo' => $contacto['numero_alt'] ?? '',
-            'correo_electronico'          => $contacto['correo'] ?? '',
-        ]);
-    }
-
-    /**
-     * Domicilio del familiar, contra la persona recién registrada; traduce los nombres del formulario y delega el upsert en ContactoDireccionTrait.
-     * Es opcional: si falta sector, calle, número o parroquia no se escribe nada, para no dejar una fila a medias en `direccion`.
-     */
-    private function upsertDireccionPersona(int $personaId, array $direccion): void
-    {
-        $sector    = trim((string) ($direccion['sector'] ?? ''));
-        $calle     = trim((string) ($direccion['calle'] ?? ''));
-        $casa      = trim((string) ($direccion['casa'] ?? ''));
-        // La clave es `id_parroquia` (la emite decodificarFamiliares() y usa guardarDireccion()); leer solo `parroquia` descartaba la dirección sin avisar.
-        $parroquia = (int) ($direccion['id_parroquia'] ?? $direccion['parroquia'] ?? 0);
-
-        if ($sector === '' || $calle === '' || $casa === '' || $parroquia <= 0) {
-            return;
-        }
-
-        $this->guardarDireccion($personaId, [
-            'sector_urbanizacion' => $sector,
-            'calle_avenida'        => $calle,
-            'nro_casa_apto'        => $casa,
-            'punto_referencia'     => $direccion['referencia'] ?? '',
-            'id_parroquia'         => $parroquia,
-        ]);
-    }
-    private function insertFamiliares(int $estudianteId, array $familiares): void
-    {
-        foreach ($familiares as $familiar) {
-            // El parentesco es opcional: quien solo está autorizado para retirar se guarda sin vínculo (id_parentesco NULL, migración 0002).
-            // Se lee arriba si es representante legal porque lo usan dos reglas de abajo (domicilio y datos personales).
-            $esRepresentante = (int) ($familiar['representante_principal'] ?? 0) === 1;
-            $esNoFamiliar = (int) ($familiar['solo_autorizado'] ?? 0) === 1;
-            $parentescoId = $this->resolveCatalogId('parentesco', 'id_parentesco', $familiar['parentesco'] ?? '');
-
-            /* Sin parentesco solo se guarda si se marcó "no es familiar"; resolveCatalogId() da null tanto si no vino el nombre
-               como si no existe en el catálogo, y este segundo caso dejaba filas "Sin parentesco" en silencio.
-               Se comprueba aquí, único sitio que escribe, y se lanza excepción para que create() haga rollBack. */
-            if ($parentescoId === null && !$esNoFamiliar) {
-                throw new DatoFamiliarIncompletoException(
-                    'No se pudo resolver el parentesco de "' . ($familiar['nombre_referencia'] ?? 'un familiar')
-                    . '". Revise el catálogo de parentescos o márquelo como "no es familiar".'
-                );
-            }
-            /* Nivel de instrucción y ocupación (por nombre) son obligatorios solo para el representante legal, el padre o la madre;
-               a los demás no se les pregunta y van NULL (migración 0005), en lugar de un dato falso tomado de la primera fila del catálogo.
-               La condición usa el nombre del parentesco y no su id, igual que el controlador, porque los ids pueden cambiar. */
-            $pideDatosPersonales = $esRepresentante || $this->esPadreOMadre((string) ($familiar['parentesco'] ?? ''));
-            $nivelId = $pideDatosPersonales
-                ? $this->resolveCatalogId('nivel_instruccion', 'id_nivel_instruccion', (string) ($familiar['nivel_instruccion'] ?? ''))
-                : null;
-            $ocupacionId = $pideDatosPersonales
-                ? $this->resolveCatalogId('ocupacion', 'id_ocupacion', (string) ($familiar['ocupacion'] ?? ''))
-                : null;
-
-            // Si los pide y no vienen o no existen en el catálogo, el payload es incoherente y se rechaza (red que no depende del cliente).
-            if ($pideDatosPersonales && ($nivelId === null || $ocupacionId === null)) {
-                throw new DatoFamiliarIncompletoException(
-                    'No se pudo resolver el nivel de instrucción o la ocupación de "'
-                    . ($familiar['nombre_referencia'] ?? 'un familiar') . '". Revise los catálogos.'
-                );
-            }
-            // NULL es válido (no se preguntó); 0 no se puede guardar en una FK. resolveCatalogId() nunca devuelve 0, así que esto filtra un 0 externo.
-            if ($nivelId === 0 || $ocupacionId === 0) {
-                throw new DatoFamiliarIncompletoException(
-                    'Nivel de instrucción u ocupación con un id que no existe.'
-                );
-            }
-
-            $nombre = trim($familiar['nombre_referencia'] ?? '');
-            if ($nombre === '') {
-                continue;
-            }
-            [$primerNombre, $primerApellido] = $this->splitNombre($nombre);
-
-            // Tipo de documento y sexo salen del modal; hardcodear 'V' y 'M' registraba como venezolano a un representante extranjero y rompía la letra de la cédula escolar.
-            $tipoDocumento = mb_strtoupper(trim((string) ($familiar['tipo_documento'] ?? '')), 'UTF-8');
-            if (!in_array($tipoDocumento, ['V', 'E'], true)) {
-                $tipoDocumento = 'V';
-            }
-            $sexo = ($familiar['sexo'] ?? 'M') === 'F' ? 'F' : 'M';
-
-            $documento = trim((string) ($familiar['numero_documento'] ?? ''));
-
-            if ($documento === '' && $esRepresentante) {
-                // El representante aporta los 7 dígitos de la cédula escolar; sin documento real no hay cédula (validate() ya avisa antes).
-                continue;
-            }
-
-            // Solo los familiares que no son el representante toleran un documento sintético, porque no interviene en la cédula escolar.
-            if ($documento === '') {
-                $documento = 'FAM' . $estudianteId . '-' . random_int(100000, 999999);
-            }
-            $documento = mb_substr($documento, 0, 20);
-
-            // La fecha de nacimiento es obligatoria para el representante y opcional para los demás, pero persona.fecha_nacimiento es NOT NULL: nunca se inventa una de relleno.
-            $fechaNacimiento = $this->normalizarFechaNacimiento(
-                (string) ($familiar['fecha_nacimiento'] ?? '')
-            );
-
-            $personaId = $this->buscarOCrearPersonaFamiliar(
-                $tipoDocumento,
-                $documento,
-                [
-                    'primer_nombre'    => $primerNombre,
-                    // Los segundos nombres vacíos van como NULL y no como ''.
-                    'segundo_nombre'   => $this->segundoNombre($familiar['segundo_nombre'] ?? ''),
-                    'primer_apellido'  => $primerApellido,
-                    'segundo_apellido' => $this->segundoNombre($familiar['segundo_apellido'] ?? ''),
-                ],
-                $sexo,
-                $fechaNacimiento
-            );
-
-            /* ¿La relación ya existe? La tabla tiene UNIQUE (id_persona, id_estudiante) y un INSERT a secas reventaba con el error 1062
-               al volver a guardar al mismo familiar. Ahora es alta o actualización según exista,
-               y se guarda `estado_relacion`, que permite desactivar un familiar sin borrarlo. */
-            $existe = $this->pdo->prepare(
-                'SELECT id_persona_estudiante FROM persona_estudiante
-                  WHERE id_persona = :persona AND id_estudiante = :estudiante
-                  LIMIT 1'
-            );
-            $existe->execute(['persona' => $personaId, 'estudiante' => $estudianteId]);
-            $relacionId = $existe->fetchColumn();
-
-            $estadoRelacion = (string) ($familiar['estado_relacion'] ?? 'ACTIVO');
-            if (!in_array($estadoRelacion, ['ACTIVO', 'INACTIVO', 'SUSPENDIDO'], true)) {
-                $estadoRelacion = 'ACTIVO';
-            }
-
-            if ($relacionId) {
-                $this->pdo->prepare(
-                    "UPDATE persona_estudiante
-                        SET es_representante_legal = :representante,
-                            es_autorizado_retiro   = :autorizado,
-                            vive_con_estudiante    = :vive_con,
-                            id_parentesco          = :parentesco,
-                            id_nivel_instruccion   = :nivel,
-                            id_ocupacion           = :ocupacion,
-                            estado_relacion        = :estado
-                      WHERE id_persona_estudiante = :relacion"
-                )->execute([
-                    'representante' => $esRepresentante ? 1 : 0,
-                    'autorizado'    => (int) ($familiar['autorizado_retiros'] ?? 0),
-                    'vive_con'      => (int) ($familiar['vive_con_estudiante'] ?? 0),
-                    'parentesco'    => $parentescoId,
-                    'nivel'         => $nivelId,
-                    'ocupacion'     => $ocupacionId,
-                    'estado'        => $estadoRelacion,
-                    'relacion'      => $relacionId,
-                ]);
-            } else {
-                $this->pdo->prepare(
-                  "INSERT INTO persona_estudiante (id_persona, id_estudiante, es_representante_legal,
-                   es_autorizado_retiro, vive_con_estudiante, estado_vital, estado_relacion,
-                   id_parentesco, id_nivel_instruccion, id_ocupacion)
-                   VALUES (:persona, :estudiante, :representante, :autorizado, :vive_con,
-                    'VIVO', :estado, :parentesco, :nivel, :ocupacion)"
-                )->execute([
-                    'persona'      => $personaId,
-                    'estudiante'   => $estudianteId,
-                    'representante' => $esRepresentante ? 1 : 0,
-                    'autorizado'   => (int) ($familiar['autorizado_retiros'] ?? 0),
-                    // Si esa persona vive con el menor es dato de la relación, no de la persona (migración 0003).
-                    'vive_con'    => (int) ($familiar['vive_con_estudiante'] ?? 0),
-                    'estado'      => $estadoRelacion,
-                    'parentesco'   => $parentescoId,
-                    'nivel'        => $nivelId,
-                    'ocupacion'    => $ocupacionId,
-                ]);
-            }
-
-            /* El teléfono principal es obligatorio para todos (lo exige el controlador).
-               El domicilio se guarda solo para el representante legal, para que el menor no tenga dos domicilios;
-               la regla vive aquí, único sitio que escribe, porque el payload viene del cliente y puede armarse a mano. */
-            if (!empty($familiar['contacto'])) {
-                $this->upsertContactoPersona($personaId, $familiar['contacto']);
-            }
-
-            if ($esRepresentante && !empty($familiar['direccion'])) {
-                $this->upsertDireccionPersona($personaId, $familiar['direccion']);
-            }
-        }
-    }
-
-    /**
-     * Indica si ese parentesco es el del padre o el de la madre.
-     * Compara por nombre y no por id del catálogo, igual que InscripcionesController::esPadreOMadre y esPadreOMadreSegun en enrollments.js.
-     */
-    private function esPadreOMadre(string $parentesco): bool
-    {
-        $nombre = mb_strtolower(trim($parentesco));
-
-        return $nombre === 'madre' || $nombre === 'padre';
-    }
-
-    /**
-     * Id de un catálogo por su nombre, o null si no viene nombre.
-     * Devuelve null y no 0 para distinguir "no eligió" de "eligió algo que no existe", ya que 0 en una FK sería un error de integridad.
-     */
-    private function resolveCatalogId(string $table, string $idColumn, string $nombre): ?int
-    {
-        if (trim($nombre) === '') {
-            return null;
-        }
-        $stmt = $this->pdo->prepare("SELECT {$idColumn} FROM {$table} WHERE nombre = :nombre LIMIT 1");
-        $stmt->execute(['nombre' => $nombre]);
-        $id = $stmt->fetchColumn();
-        return $id ? (int) $id : null;
-    }
-
-    private function splitNombre(string $nombre): array
-    {
-        $partes = preg_split('/\s+/', trim($nombre));
-        if (count($partes) <= 1) {
-            return [mb_substr($nombre, 0, 50), $nombre];
-        }
-        return [mb_substr($partes[0], 0, 50), mb_substr($partes[1], 0, 50)];
-    }
-
-    /**
-     * El año escolar en curso, que acota la lista a los ingresos de este año; al cambiar de período los del anterior pasan a Ratificación.
-     * Sin año en curso devuelve 0 y la lista sale vacía, preferible a mostrar alumnos de cualquier año.
-     */
+ * El año escolar en curso, sin caché a propósito: si dentro del proceso se abre
+ * o cierra un año, un valor guardado haría que inscripciones y ratificación se
+ * contradigan.
+*/
     private function anioEnCurso(): int
     {
-        // Sin caché a propósito: si dentro del proceso se abre o cierra un año, un valor guardado haría que inscripciones y ratificación se contradigan.
         return AniosEscolares::idEnCurso($this->pdo);
+    }
+
+    /**
+ * Años escolares existentes, para el selector del listado.
+ *
+ * Trae el estado de cada uno porque la vista lo necesita para decidir si el año
+ * seleccionado admite inscripciones: un año cerrado es de consulta y no debe
+ * ofrecer escrituras. Sin el estado aquí, la vista tendría que adivinarlo.
+ *
+ * @return array<int, array{id:int, nombre:string, estado:string, es_lectura:bool}>
+*/
+    public function getAniosEscolares(): array
+    {
+        $filas = $this->pdo->query(
+            'SELECT id_anio_escolar AS id, nombre_periodo AS nombre, estado
+               FROM anio_escolar
+              ORDER BY anio_inicio DESC, id_anio_escolar DESC'
+        )->fetchAll(\PDO::FETCH_ASSOC);
+
+        return array_map(static function (array $fila): array {
+            $estado = strtoupper((string) $fila['estado']);
+            return [
+                'id'          => (int) $fila['id'],
+                'nombre'      => (string) $fila['nombre'],
+                'estado'      => $estado,
+                /* Solo el ACTIVO admite escritura. Un año CERRADO es historial: se
+ consulta pero no se le escribe nada.*/
+                'es_lectura'  => $estado !== 'ACTIVO',
+            ];
+        }, $filas);
+    }
+
+    /**
+ * El año que hay que mostrar: el que pide la URL, si existe, y si no el que está
+ * en curso.
+ *
+ * Se valida contra la lista real de años en lugar de castear a entero y ya: un
+ * `?anio=999` o un `?anio=abc` no puede convertirse en un id que se meta en el SQL
+ * como si fuera un período real, y el usuario no ve una lista vacía sin
+ * explicación, ve el año en curso.
+ *
+ * @param array $filters Filtros de la petición.
+ * @return array{id:int, nombre:string, estado:string, es_lectura:bool}
+*/
+    public function getAnioSeleccionado(array $filters): array
+    {
+        $anios = $this->getAniosEscolares();
+        $pedido = (int) ($filters['anio'] ?? 0);
+
+        foreach ($anios as $anio) {
+            if ($anio['id'] === $pedido && $pedido > 0) {
+                return $anio;
+            }
+        }
+
+        // Sin año válido en la URL: al que está en curso, o el primero si no hay ninguno.
+        $enCurso = $this->anioEnCurso();
+        foreach ($anios as $anio) {
+            if ($anio['id'] === $enCurso) {
+                return $anio;
+            }
+        }
+
+        return $anios[0] ?? ['id' => 0, 'nombre' => 'sin año', 'estado' => 'CERRADO', 'es_lectura' => true];
     }
 
     private function filters(array $filters): array
     {
-        /* La lista es solo del año en curso: al cambiar de año queda vacía y los alumnos anteriores pasan a Ratificación.
-           Se filtra por el año de la ESTRUCTURA de la inscripción (cuando entró) y no por el de la matrícula,
-           que para un alumno antiguo es el año en curso y no lo sacaría de la lista. */
-        $where = ['ea.id_anio_escolar = ' . $this->anioEnCurso()];
-        $params = [];
+    /* La lista es del AÑO SELECCIONADO, por defecto el que está en curso. Se filtra por el año de la
+ ESTRUCTURA de la inscripción (cuándo entró) y no por el de la matrícula, que para un alumno
+ antiguo es el año en curso y no lo sacaría del listado.*/
+        $idAnio = $this->getAnioSeleccionado($filters)['id'];
+        $where = $idAnio > 0
+            ? ['ea.id_anio_escolar = :anio_listado']
+            : ['1 = 0'];
+        $params = ['anio_listado' => $idAnio];
 
         if (!empty($filters['q'])) {
-            foreach (['p.primer_nombre', 'p.primer_apellido', 'p.numero_documento'] as $i => $col) {
-                $params["q$i"] = '%' . $filters['q'] . '%';
+            foreach (['p.primer_nombre', 'p.primer_apellido', 'p.numero_documento'] as $i => $col) {$params["q$i"] = '\%' . $filters['q'] . '%';
             }
             $where[] = '(p.primer_nombre LIKE :q0 OR p.primer_apellido LIKE :q1 OR p.numero_documento LIKE :q2)';
         }
         // El año no es un filtro: la lista es del año en curso, y aceptarlo por URL (?anio=...) ampliaría su alcance sin que la interfaz lo muestre.
-        if (!empty($filters['grado'])) {
-            $where[] = 'g.nombre = :grado';
-            $params['grado'] = $filters['grado'];
+        if (!empty($filters['grado'])) {$where[] = 'g.nombre = :grado';
+            $params['grado'] =$filters['grado'];
         }
-        if (!empty($filters['seccion'])) {
-            $where[] = 's.nombre = :seccion';
-            $params['seccion'] = $filters['seccion'];
+        if (!empty($filters['seccion'])) {$where[] = 's.nombre = :seccion';
+            $params['seccion'] =$filters['seccion'];
         }
-        return [$where, $params];
+        if (array_key_exists('id_turno', $filters)) {
+            $where[] = 'ea.id_turno = :id_turno';
+            $params['id_turno'] = (int) $filters['id_turno'];
+        }
+
+        /* Estado del alumno: por defecto solo los que NO están retirados.
+ El retiro no es una inscripción nueva, es el mismo alumno que dejó de
+ estar activo, así que el filtro trabaja sobre el alumno (EXISTS) y no sobre
+ el tipo de la fila: la fila RETIRO no tiene fila en `inscripcion` y
+ filtrar por `matricula.tipo` no sacaría al alumno de la lista.
+ Con estado=todos se ve también, con su insignia, y sin acciones de
+ edición: el registro se consulta igual de uno u otro modo.*/
+        if (($filters['estado'] ?? 'activos') !== 'todos') {
+            $where[] = 'NOT ' . self::retiradoSql('m');
+        }
+
+        return [$where,$params];
     }
 }

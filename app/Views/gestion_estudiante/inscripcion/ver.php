@@ -2,13 +2,27 @@
 /**
  * Vista: gestion_estudiante/inscripcion/ver.php
  * Detalle (solo lectura) de una inscripción ya registrada.
- *
- * Espera del controlador:
- * - array $item  datos de InscripcionesModel::getById()
- */
+*/
 
-$item   = $item ?? [];
-$nombre = $item['nombre'] ?? 'Estudiante';
+$item        = $item ?? [];
+$componentes = __DIR__ . '/../../components/';
+
+$pNom = trim($item['primer_nombre'] ?? '');
+$sNom = trim($item['segundo_nombre'] ?? '');
+$pApe = trim($item['primer_apellido'] ?? '');
+$sApe = trim($item['segundo_apellido'] ?? '');
+
+$nom2 = $sNom !== '' ? substr($sNom, 0, 1) . '.' : '';
+$ape2 = $sApe !== '' ? substr($sApe, 0, 1) . '.' : '';
+
+$estNombreArray = array_filter([$pNom, $nom2, $pApe, $ape2]);
+$nombre = implode(' ', $estNombreArray);
+
+if (empty($nombre) && !empty($item['nombre'])) {
+    $nombre = $item['nombre'];
+}
+$nombre = $nombre ?: 'Estudiante';
+$nombre = ucwords(strtolower($nombre));
 
 $pageTitle       = 'Detalle de Inscripción';
 $pageDescription = 'Resumen de la inscripción registrada para ' . $nombre . '.';
@@ -20,10 +34,12 @@ $breadcrumbs = [
 ];
 
 $esPrimerIngreso = (int) ($item['es_primer_ingreso'] ?? 0) === 1;
+$isModal = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest');
 
 ob_start();
 ?>
 
+<?php if (!$isModal): ?>
 <div class="page-header">
   <div>
     <h1 class="page-header__title">Detalle de Inscripción</h1>
@@ -37,7 +53,72 @@ ob_start();
     </a>
   </div>
 </div>
+<?php endif; ?>
 
+<?php if ($isModal): ?>
+<?php /* Dentro del modal se usa el mismo lenguaje que los demás modales de
+ detalle (empleados/cuentas/ratificación): cabecera user-detail + bloques
+ wizard-summary armados con los componentes. El layout de página
+ (content-card en dos columnas) se reserva para la vista completa.*/ ?>
+<div class="user-detail__header">
+  <span class="avatar avatar--xl avatar--<?= htmlspecialchars($item['avatar_color'] ?? 'primary') ?>">
+    <?php if (!empty($item['avatar_img'])): ?>
+      <img src="<?= htmlspecialchars($item['avatar_img']) ?>" alt="">
+    <?php else: ?>
+      <?= htmlspecialchars($item['iniciales'] ?? 'ES') ?>
+    <?php endif; ?>
+  </span>
+  <div class="user-detail__name"><?= htmlspecialchars($nombre) ?></div>
+  <div class="user-detail__meta">
+    <span><?= htmlspecialchars($item['cedula'] ?? '—') ?></span>
+    <span class="user-detail__meta-sep">&bull;</span>
+    <span>
+      <span class="status-badge status-badge--active">
+        <i class="bi bi-check-circle"></i> Inscripción completada
+      </span>
+    </span>
+  </div>
+</div>
+
+<div class="wizard-summary__row mb-3">
+  <?php
+  $wsIcono  = 'mortarboard';
+  $wsTitulo = 'Ubicación en ' . ($item['anio_escolar'] ?? '—');
+  $wsCampos = [
+      ['Grado',       null, $item['grado']        ?? '—'],
+      ['Sección',     null, $item['seccion']      ?? '—'],
+      ['Turno',       null, $item['turno']        ?? '—'],
+      ['Año escolar', null, $item['anio_escolar'] ?? '—'],
+  ];
+  include $componentes . 'wizard-summary-section.php';
+  ?>
+</div>
+
+<?php
+$wsIcono  = 'calendar-check';
+$wsTitulo = 'Registro';
+$wsClass  = 'mb-3';
+$wsCampos = [
+    ['Fecha de inscripción', null, $item['fecha_inscripcion'] ?? '—'],
+    ['N.º de inscripción',   null, '#' . ($item['numero_inscripcion'] ?? '—')],
+];
+include $componentes . 'wizard-summary-section.php';
+
+$badgeIngreso = $esPrimerIngreso
+    ? '<span class="status-badge status-badge--active">Primera vez</span>'
+    : '<span class="status-badge status-badge--pending">Traslado</span>';
+
+$wsIcono  = 'signpost-split';
+$wsTitulo = 'Procedencia académica';
+$wsCampos = [
+    ['Tipo de ingreso',            null, null, $badgeIngreso],
+    ['Último grado cursado',       null, ($item['ult_grado_cursado'] ?? '') ?: '—'],
+    ['Año escolar de procedencia', null, ($item['anio_escolar_pre']  ?? '') ?: '—'],
+    ['Motivo de retiro',           null, ($item['motivo_egreso']     ?? '') ?: '—'],
+];
+include $componentes . 'wizard-summary-section.php';
+?>
+<?php else: ?>
 <div class="row g-4">
 
   <!-- ==================== Columna principal ==================== -->
@@ -125,15 +206,15 @@ ob_start();
         </div>
         <div class="detail-list__item">
           <div class="label-sigde">Último grado cursado</div>
-          <div class="detail-list__value"><?= htmlspecialchars($item['ult_grado_cursado'] ?: '—') ?></div>
+          <div class="detail-list__value"><?= htmlspecialchars(($item['ult_grado_cursado'] ?? '') ?: '—') ?></div>
         </div>
         <div class="detail-list__item">
           <div class="label-sigde">Año escolar de procedencia</div>
-          <div class="detail-list__value"><?= htmlspecialchars($item['anio_escolar_pre'] ?: '—') ?></div>
+          <div class="detail-list__value"><?= htmlspecialchars(($item['anio_escolar_pre'] ?? '') ?: '—') ?></div>
         </div>
         <div class="detail-list__item">
           <div class="label-sigde">Motivo de retiro</div>
-          <div class="detail-list__value"><?= htmlspecialchars($item['motivo_egreso'] ?: '—') ?></div>
+          <div class="detail-list__value"><?= htmlspecialchars(($item['motivo_egreso'] ?? '') ?: '—') ?></div>
         </div>
       </div>
     </div>
@@ -157,7 +238,7 @@ ob_start();
         </div>
         <div class="detail-list__item">
           <div class="label-sigde">N.º de inscripción</div>
-          <div class="detail-list__value">#<?= htmlspecialchars((string) ($item['id'] ?? '—')) ?></div>
+          <div class="detail-list__value">#<?= htmlspecialchars((string) ($item['numero_inscripcion'] ?? '—')) ?></div>
         </div>
       </div>
     </div>
@@ -182,7 +263,13 @@ ob_start();
   </div>
 
 </div>
+<?php /* fin de la vista de página completa (!$isModal)*/ ?>
+<?php endif; ?>
 
 <?php
 $pageContent = ob_get_clean();
-require __DIR__ . '/../../layouts/app.php';
+if ($isModal) {
+    echo $pageContent;
+} else {
+    require __DIR__ . '/../../layouts/app.php';
+}

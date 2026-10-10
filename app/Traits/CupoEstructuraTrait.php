@@ -16,64 +16,22 @@ use App\Support\Matriculas;
  * configuración con los estudiantes que realmente la ocupan, y lo usan los dos
  * módulos que necesitan el dato: InscripcionesModel (el paso académico) y
  * RatificacionModel (que proyecta al periodo siguiente).
- *
- * ── El modelo de matrícula ──────────────────────────────────────────────────
- * La idea de negocio es que la matrícula es HISTORIAL: un registro por estudiante
- * por año escolar. Un alumno que sigue en el plantel tiene una fila por cada año
- * que cursó, y NO se sobrescribe ni se borra la anterior.
- *
- * La situación del alumno para ese año es una PROPIEDAD de la fila:
- *
- *   matricula  id_matricula, id_estudiante, fecha_matricula,
- *              id_anio_escolar, id_estructura_academica,
- *              tipo ENUM('INSCRIPCION','RATIFICACION','RETIRO','EGRESO')
- *              → el año y la estructura viven ACÁ, no en la inscripción.
- *   retiro     tabla aparte, con el motivo y la fecha. Apunta a la fila RETIRO.
- *   egreso     tabla aparte, con el detalle. Apunta a la fila EGRESO.
- *   inscripcion  la procedencia del alumno: de qué colegio viene, qué año cursó
- *              allá. Es un dato de origen, una sola vez por estudiante
- *              (uk_inscripcion_estudiante), y NO es lo mismo que el tipo
- *              INSCRIPCION: un alumno que viene de otro colegio tiene su
- *              inscripción con es_primer_ingreso = 0 y aun así su primera fila de
- *              matrícula es INSCRIPCION, porque es su primer ingreso AQUÍ.
- *
- * El tipo dice QUÉ pasó; `retiro` y `egreso` dicen POR QUÉ. Por eso el conteo de
- * abajo puede leer `tipo` y no tiene que deducir nada buscando en tres tablas.
- *
- * Un RETIRO también libera el puesto: se va del plantel. Mudarse a otra
- * institución es el mismo caso, no uno aparte.
- *
- * ── Qué cuenta como ocupado ───────────────────────────────────────────────
- * Cuenta las matrículas `ACTIVO` de la combinación. Nada más: la fila de un
- * alumno cuenta en la sección en la que está, porque la estructura ahora está en
- * la propia matrícula y no hay que resolver con cuál inscripción se queda.
- *
- * Cuando se aprueba un retiro o se registra un egreso, el cupo se libera solo: se
- * cambia el `estado` de esa fila, y el siguiente que pregunta lo cuenta y lo ve.
- *
- * Todo se resuelve con DOS consultas (los nombres de los niveles y el conteo),
- * no una por combinación.
- *
- * @author Logística
- * @package App\Traits
- */
+*/
 trait CupoEstructuraTrait
 {
-    /**
-     * Las combinaciones de `estructura_academica` con lo ocupado y lo que queda.
-     *
-     * @param  int|null $idAnioEscolar null = todos los años. La inscripción
-     *         filtra por el año activo; la ratificación necesita el que sea,
-     *         porque su estructura de destino es del periodo SIGUIENTE, que
-     *         todavía no está activo, y filtrar por el activo le daría "no
-     *         existe" siempre.
-     * @return array<int, array<string, mixed>> con id_estructura_academica,
-     *         id_grado, id_seccion, id_turno, id_anio_escolar, grado, seccion,
-     *         turno, capacidad_maxima, ocupados, disponibles, lleno y nombre.
-     */
-    protected function estructurasConCupo(?int $idAnioEscolar = null): array
+    public function estructurasConCupo(?int $idAnioEscolar = null, ?int $idTurno = null): array
     {
-        $donde = $idAnioEscolar !== null ? 'WHERE ea.id_anio_escolar = :anio' : '';
+        $condiciones = [];
+        $parametros = [];
+        if ($idAnioEscolar !== null) {
+            $condiciones[] = 'ea.id_anio_escolar = :anio';
+            $parametros['anio'] = $idAnioEscolar;
+        }
+        if ($idTurno !== null) {
+            $condiciones[] = 'ea.id_turno = :turno';
+            $parametros['turno'] = $idTurno;
+        }
+        $donde = $condiciones !== [] ? 'WHERE ' . implode(' AND ', $condiciones) : '';
         $stmt  = $this->pdo->prepare(
             "SELECT ea.id_estructura_academica,
                     ea.id_grado, ea.id_seccion, ea.id_turno, ea.id_anio_escolar,
@@ -86,7 +44,7 @@ trait CupoEstructuraTrait
                {$donde}
               ORDER BY g.nombre, s.nombre, t.nombre"
         );
-        $stmt->execute($idAnioEscolar !== null ? ['anio' => $idAnioEscolar] : []);
+        $stmt->execute($parametros);
 
         $ocupadosPor = $this->conteoDeOcupados();
 
@@ -117,34 +75,7 @@ trait CupoEstructuraTrait
         return $filas;
     }
 
-    /**
-     * Estructura -> cuántos estudiantes la ocupan, en una sola consulta.
-     *
-     * Esto es "cuántos están CURSANDO", y ahora se lee directo:
-     *
-     *   1. Cada fila de `matricula` es un alumno cursando UN año en UNA
-     *      combinación, porque el año y la estructura están en la propia fila.
-     *      Un alumno que viene del año anterior tiene dos filas, pero solo una
-     *      cuenta: la del año que se está contando.
-     *   2. Solo cuentan las que son INSCRIPCION o RATIFICACION, que son las que
-     *      significan "cursando". RETIRO y EGRESO son filas de cierre: el alumno
-     *      ya no está, y liberaron el puesto.
-     *
-     * Ojo con el detalle de por qué hay dos filas en el mismo año y no es un
-     * error: un alumno que entra a tercero y se retira ese mismo año tiene su
-     * RATIFICACION de tercero y su RETIRO de tercero. La de RATIFICACION cuenta
-     * (estuvo cursando) y la de RETIRO no. Por eso el filtro es por tipo y no por
-     * "la última fila del alumno": la última fila de ese alumno es el retiro, y
-     * contar solo la última daría 0 donde debería dar 1.
-     *
-     * El COUNT es DISTINCT por estudiante a propósito: con el UNIQUE
-     * (estudiante, año) es imposible que un mismo alumno tenga dos filas en la
-     * misma combinación, pero mantenerlo hace que el número no dependa de que esa
-     * restricción siga puesta.
-     *
-     * @return array<int, int>
-     */
-    private function conteoDeOcupados(): array
+    public function conteoDeOcupados(): array
     {
         $filas = $this->pdo->query(
             'SELECT id_estructura_academica AS combo, COUNT(DISTINCT id_estudiante) AS ocupados
@@ -162,15 +93,7 @@ trait CupoEstructuraTrait
         return $mapa;
     }
 
-    /**
-     * La combinación grado + sección + turno de un año, con su disponibilidad.
-     *
-     * null cuando no está registrada: ese es el caso que el formulario no debe
-     * permitir, porque significa que esa sección no existe para ese periodo.
-     *
-     * @return array<string, mixed>|null
-     */
-    protected function combinacionConCupo(int $idGrado, int $idSeccion, int $idTurno, int $idAnioEscolar): ?array
+    public function combinacionConCupo(int $idGrado, int $idSeccion, int $idTurno, int $idAnioEscolar): ?array
     {
         if ($idAnioEscolar <= 0) {
             return null;
@@ -187,16 +110,7 @@ trait CupoEstructuraTrait
         return null;
     }
 
-    /**
-     * La disponibilidad de UNA combinación, por su id de estructura.
-     *
-     * Es la comprobación puntual para cuando ya se sabe cuál es: la ratificación
-     * resuelve sola la de destino, y la inscripción llega con el id ya resuelto.
-     * null si ese id no existe.
-     *
-     * @return array<string, mixed>|null
-     */
-    protected function disponibilidadDe(int $idEstructura): ?array
+    public function disponibilidadDe(int $idEstructura): ?array
     {
         foreach ($this->estructurasConCupo() as $combinacion) {
             if ($combinacion['id_estructura_academica'] === $idEstructura) {
@@ -207,17 +121,9 @@ trait CupoEstructuraTrait
         return null;
     }
 
-    /**
-     * Los niveles que se ofrecen en el paso académico, con lo que queda libre en
-     * cada uno, y las combinaciones con su número.
-     *
-     * @param  int $idAnioEscolar
-     * @return array{grados:array<int,array<string,mixed>>,secciones:array<int,array<string,mixed>>,
-     *               turnos:array<int,array<string,mixed>>,combinaciones:array<int,array<string,mixed>>}
-     */
-    protected function opcionesAcademicas(int $idAnioEscolar): array
+    public function opcionesAcademicas(int $idAnioEscolar, ?int $idTurno = null): array
     {
-        $combos = $this->estructurasConCupo($idAnioEscolar);
+        $combos = $this->estructurasConCupo($idAnioEscolar, $idTurno);
 
         $grados    = [];
         $secciones = [];
@@ -246,19 +152,7 @@ trait CupoEstructuraTrait
         ];
     }
 
-    /**
-     * Revisa el cupo de una combinación DENTRO de la transacción que va a
-     * escribir, y bloquea la fila mientras la revisa.
-     *
-     * Existe porque comprobar el cupo antes de abrir la transacción no alcanza:
-     * entre la comprobación y el guardado cabe otro guardado, y los dos
-     * pasarían la misma revisión con el mismo conteo. El FOR UPDATE sobre la
-     * fila de estructura_academica hace que el segundo guardado espere, y al
-     * despertar vuelve a contar con el primero ya confirmado.
-     *
-     * @throws CupoAgotadoException si la combinación no existe o ya está llena.
-     */
-    protected function reservarCupo(int $idEstructura): array
+    public function reservarCupo(int $idEstructura): array
     {
         $this->pdo->prepare(
             'SELECT id_estructura_academica FROM estructura_academica

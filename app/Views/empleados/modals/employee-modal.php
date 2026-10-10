@@ -2,17 +2,17 @@
 /**
  * app/Views/empleados/modals/employee-modal.php
  * Wizard "Registrar Nuevo Empleado" de 6 pasos, armado sobre components/modal.php:
- *   - el stepper entra por $modalHeaderExtra (entre el header y el body)
- *   - el <form> vive en el body y los botones del footer lo referencian con form="..."
+ * - el stepper entra por $modalHeaderExtra (entre el header y el body)
+ * - el <form> vive en el body y los botones del footer lo referencian con form="..."
  *
  * Para agregar/quitar un paso basta con editar el arreglo $pasos:
  * alimenta el stepper y los paneles a la vez.
  *
  * Variables en scope (definidas en index.php):
- *   $cargos, $estados            -> employee-steps/step-4 y step-3
- *   $tiposInstitucion            -> modals/new-institution-modal.php
- *   $titulos, $instituciones, $gradosAcademicos -> modals/add-title-modal.php
- */
+ * $cargos, $estados, $turnos -> employee-steps/step-4 y step-3
+ * $tiposInstitucion -> modals/new-institution-modal.php
+ * $titulos, $instituciones, $gradosAcademicos -> modals/add-title-modal.php
+*/
 $pasos = [
     1 => ['label' => 'Personales', 'vista' => 'step-1-personales'],
     2 => ['label' => 'Contacto',   'vista' => 'step-2-contacto'],

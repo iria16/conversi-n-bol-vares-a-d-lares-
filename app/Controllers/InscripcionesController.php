@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
-
+use App\Exceptions\AnioEscolarCerradoException;
 use App\Exceptions\CupoAgotadoException;
 use App\Models\InscripcionesModel;
 use App\Support\Instituciones;
@@ -13,28 +13,45 @@ use App\Support\Documento;
 use App\Traits\InstitucionTrait;
 use App\Traits\UbicacionTrait;
 use App\Traits\ContactoValidacionTrait;
+use App\Traits\FamiliaresValidacionTrait;
 use App\Traits\FotoSubidaTrait;
 use App\Traits\PersonaValidacionTrait;
 use App\Traits\ValidacionFechaTrait;
+use App\Traits\TextoTrait;
 use InvalidArgumentException;
 use PDO;
 use Throwable;
 
 /**
- * Inscripciones (gestion_estudiante/inscripcion) con asistente wizard.
- * Endpoints: index, store, buscarPersona, ver, continuar, getUbicacion, guardarInstitucion.
- * Los campos de extractData() los manda public/assets/js/enrollments.js.
- */
+ * Inscripciones (gestion_estudiante/inscripcion).
+ *
+ * Endpoints:
+ * - index GET listado con filtros
+ * - ver GET detalle de una inscripción
+ * - buscar POST busca al estudiante por cédula para el alta
+ * - store POST registra la inscripción (JSON si es AJAX)
+ * - updateEstudiante POST guarda los datos del estudiante desde el modal
+ *
+ * Lo que toca una matrícula pasa por el modelo, que es donde vive el bloqueo de cupo. Este
+ * controlador valida y traduce las excepciones de dominio: 409 para un conflicto de estado y
+ * 422 para un error de campo.
+*/
 class InscripcionesController extends CrudController
 {
     use FotoSubidaTrait;
     use PersonaValidacionTrait;
     use ContactoValidacionTrait;
+    /* Los familiares se leen y se validan igual en inscripción y en ratificación;
+ ver FamiliaresValidacionTrait para por qué no pueden ser dos copias.
+ Ese trait usa errorTipoDocumento() y errorFormatoDocumento() de
+ PersonaValidacionTrait, así que ambos tienen que estar en la clase.*/
+    use FamiliaresValidacionTrait;
     use ValidacionFechaTrait;
     use InstitucionTrait;
     use UbicacionTrait;
+    use TextoTrait;
 
-    /** Opciones de FotoSubidaTrait para la foto del estudiante. */
+    /** Opciones de FotoSubidaTrait para la foto del estudiante.*/
     private const FOTO_ESTUDIANTE = [
         'campo'   => 'foto',
         'carpeta' => 'estudiantes',
@@ -44,13 +61,16 @@ class InscripcionesController extends CrudController
     protected string $viewPath  = 'gestion_estudiante/inscripcion';
     protected string $routeName = 'inscripciones';
 
+    /** Tipos de sangre admitidos; los mismos del ENUM de ficha_medica.tipo_sangre.*/
+    private const TIPOS_SANGRE = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+
     /**
-     * Modelo con su tipo real (InscripcionesModel), para que el editor
-     * resuelva sus métodos en vez de verlos sobre `object`.
-     */
+ * Modelo con su tipo real (InscripcionesModel), para que el editor
+ * resuelva sus métodos en vez de verlos sobre `object`.
+*/
     private function modelo(): InscripcionesModel
     {
-        /** @var InscripcionesModel $model */
+        /** @var InscripcionesModel $model*/
         $model = $this->getModel();
 
         return $model;
@@ -63,26 +83,62 @@ class InscripcionesController extends CrudController
 
     protected function getFiltersFromRequest(): array
     {
-        return [
+        $filters = [
             'q'       => trim($_GET['q'] ?? ''),
-            'anio'    => trim($_GET['anio'] ?? ''),
+            /* Solo el NOMBRE del filtro (q/grado/seccion) se usa como texto. El año
+ NO se pasa crudo: si fuera un id que no existe, la lista saldría
+ vacía sin explicación. getAnioSeleccionado() lo contrasta con los años
+ reales y, si no está, cae en el que está en curso.*/
+            'anio'    => ctype_digit(trim((string) ($_GET['anio'] ?? ''))) ? (int) $_GET['anio'] : 0,
             'grado'   => trim($_GET['grado'] ?? ''),
             'seccion' => trim($_GET['seccion'] ?? ''),
+            /* Estado del alumno: 'activos' (por defecto, oculta a los retirados) o
+ 'todos'. Se valida contra la lista en vez de pasar cualquier valor de
+ la URL al modelo.*/
+            'estado'  => in_array($_GET['estado'] ?? '', ['activos', 'todos'], true)
+                            ? (string) $_GET['estado']
+                            : 'activos',
         ];
+        $turno = $this->turnoSecretariaActual();
+        if ($turno !== null) {
+            $filters['id_turno'] = $turno;
+        }
+        return $filters;
     }
 
     protected function getExtraIndexData(array $items, array $filters): array
     {
-        $model = $this->modelo();
+        $model            = $this->modelo();
+        $anios            = $model->getAniosEscolares();
+        $anioSeleccionado = $model->getAnioSeleccionado($filters);
+
+        /* Los filtros de grado y sección son los que ese AÑO tuvo, no el catálogo
+ completo: el catálogo es global y ofrecería combinaciones que en ese período
+ no existieron. Si el año no tiene estructuras registradas se cae al
+ catálogo, para que el filtro no quede vacío sin motivo.*/
+        $gradosAnio    = $model->getGradosSeccionesDelAnio($anioSeleccionado['id'], 'grado');
+        $seccionesAnio = $model->getGradosSeccionesDelAnio($anioSeleccionado['id'], 'seccion');
+
         return [
-            'stats'           => $model->getStats(),
+            /* El año se resuelve UNA vez y alimenta todo lo de abajo: la tabla, las
+ tarjetas y los filtros. Si cada pieza lo sacara por su cuenta, con un año
+ inválido en la URL se vería una lista vacía con tarjetas de otro año.*/
+            'anios'           => $anios,
+            'anioSeleccionado' => $anioSeleccionado,
+            'anioEsLectura'   => $anioSeleccionado['es_lectura'],
+
+            'stats'           => $model->getStats($filters['id_turno'] ?? null, $anioSeleccionado['id']),
             'inscripciones'   => $items,
-            // El año en curso se pasa solo para mostrarlo (el listado es de este año).
-            'anioEnCurso'     => \App\Support\AniosEscolares::nombreEnCurso($this->conexion()),
-            'grados'          => $model->getOptions('grados'),
-            'secciones'       => $model->getOptions('secciones'),
-            // Combinaciones registradas en Estructura Académica, con su disponibilidad.
-            'academico'       => $model->opcionesPasoAcademico(),
+
+            'grados'          => $gradosAnio ?: $model->getOptions('grados'),
+            'secciones'       => $seccionesAnio ?: $model->getOptions('secciones'),
+
+            /* Las combinaciones del wizard son SIEMPRE del año en curso, nunca del año
+ que se está consultando: el wizard sirve para inscribir, y un año cerrado
+ no admite inscripciones. Con el botón de nueva inscripción oculto en años
+ cerrados, el wizard no llega a mostrarse en ese caso.*/
+            'academico'       => $model->opcionesPasoAcademico($filters['id_turno'] ?? null),
+
             // Grados sueltos para el paso 2: el grado del colegio anterior no
             // tiene que estar en la estructura de este período.
             'gradosModal'     => $model->getOptionsForModal('grado'),
@@ -90,32 +146,46 @@ class InscripcionesController extends CrudController
             // Solo tipos de etapa del estudiante (preescolar o primaria).
             'tiposInstitucionEstudiante' => $model->getTiposInstitucionEstudiante(),
             'catFamiliares'   => $model->getFamiliarCatalogs(),
+            /* Nacionalidad del estudiante: catálogo propio, no el del sub-modal de
+               familiares. Va suelto y no dentro de catFamiliares porque lo pinta otro
+               formulario. */
+            'nacionalidades'  => $model->getNacionalidades(),
+            // Recaudos del paso 5, desde el catálogo: al agregar uno allí, aparece aquí.
+            'recaudos'        => $model->getRecaudos(),
             'parroquias'      => $model->getParroquias(),
             // Estados para la cascada del familiar; municipio y parroquia llegan por AJAX.
             'estados'         => $model->getEstados(),
             'anioActivo'      => $model->getAnioActivo(),
+            'anioEnCurso'     => \App\Support\AniosEscolares::nombreEnCurso($this->conexion()),
         ];
     }
 
     /**
-     * Arma los datos del alta a partir del wizard (contrato de CrudController::store()).
-     * También sube la foto de $_FILES: si es inválida, procesarFotoSubida()
-     * responde el error y corta antes de validate() y create().
-     */
+ * Arma los datos del alta a partir del wizard.
+ * Se aplica limpieza profunda (XSS, mayúsculas, formato) a todo el arreglo.
+ * Nota: La foto ya no se procesa aquí para evitar archivos basura si falla la validación.
+*/
     protected function extractData(array $source): array
     {
+        $raw = static fn(string $clave): string => (string) ($source[$clave] ?? '');
+
         $idGrado   = (int) ($source['id_grado'] ?? 0);
         $idSeccion = (int) ($source['id_seccion'] ?? 0);
         $idTurno   = (int) ($source['id_turno'] ?? 0);
         $anio      = $this->modelo()->getAnioActivo();
 
-        // La combinación grado + sección + turno debe estar registrada para el
-        // año activo y tener cupo. Se revisa otra vez aquí porque desde que se
-        // abrió el wizard pudo llenarse o desregistrarse.
         $erroresCombo = [];
         $combinacion  = null;
         $estructuraId = 0;
-        if ($idGrado > 0 && $idSeccion > 0 && $idTurno > 0) {
+
+        /* Sin año escolar activo no hay estructura donde buscar, y el mensaje genérico de
+ abajo decía "no registrada en la Estructura Académica de ." con el año en
+ blanco: el problema real es que no hay período abierto.*/
+        if ((int) ($anio['id'] ?? 0) <= 0) {
+            $erroresCombo['id_grado'] = 'No hay un año escolar activo. '
+                . 'La directora o el administrador deben abrir un período en '
+                . 'Configuración → Años escolares antes de inscribir a un estudiante.';
+        } elseif ($idGrado > 0 && $idSeccion > 0 && $idTurno > 0) {
             $combinacion = $this->modelo()->combinacionDeGradoSeccionTurno(
                 $idGrado,
                 $idSeccion,
@@ -128,8 +198,6 @@ class InscripcionesController extends CrudController
                     . 'registrada en la Estructura Académica de '
                     . (string) ($anio['nombre'] ?? 'este año') . '.';
             } else {
-                // El id se deja aunque la sección esté llena: así validate() no
-                // suma un segundo aviso que contradiga el del cupo.
                 $estructuraId = (int) $combinacion['id_estructura_academica'];
 
                 if ($combinacion['lleno']) {
@@ -147,94 +215,140 @@ class InscripcionesController extends CrudController
             'persona' => [
                 'tipo_documento'   => $documento['tipo_documento'],
                 'numero_documento' => $documento['numero_documento'],
-                'fecha_nacimiento' => trim($source['fecha_nacimiento'] ?? ''),
-                // Mismo criterio que EmpleadoController: nombres capitalizados y recortados.
-                'primer_nombre'    => $this->capitalizarTitulo(trim($source['primer_nombre'] ?? '')),
-                'segundo_nombre'   => $this->capitalizarTitulo(trim($source['segundo_nombre'] ?? '')),
-                'primer_apellido'  => $this->capitalizarTitulo(trim($source['primer_apellido'] ?? '')),
-                'segundo_apellido' => $this->capitalizarTitulo(trim($source['segundo_apellido'] ?? '')),
-                'sexo'             => ($source['sexo'] ?? 'M') === 'F' ? 'F' : 'M',
+                'fecha_nacimiento' => $this->normalizarEspacios($raw('fecha_nacimiento')),
+                'primer_nombre'    => $this->capitalizarTitulo($raw('primer_nombre')),
+                'segundo_nombre'   => $this->capitalizarTitulo($raw('segundo_nombre')),
+                'primer_apellido'  => $this->capitalizarTitulo($raw('primer_apellido')),
+                'segundo_apellido' => $this->capitalizarTitulo($raw('segundo_apellido')),
+                'sexo'             => $this->normalizarEspacios($raw('sexo')) === 'F' ? 'F' : 'M',
+                /* El estudiante es el único caso en que se guardan los tres niveles del
+                   lugar de nacimiento. El municipio se deduce de la parroquia, así que no
+                   se persiste: su name en el formulario lleva el sufijo _ui. */
+                'id_estado_nacimiento'    => (int) ($raw('id_estado_nacimiento') ?? '0'),
+                /* Se guarda tal cual la escribe la secretaria: el campo tiene una lista de
+                   países que sugiere al teclear, pero no es un catálogo cerrado. Se
+                   capitalizan las palabras para que "colombia" y "Colombia" queden
+                   iguales de leer en el expediente. */
+                'id_nacionalidad'         => (int) ($raw('id_nacionalidad') ?? '0'),
+                'id_parroquia_nacimiento' => (int) ($raw('id_parroquia_nacimiento') ?? '0'),
             ],
-            'foto'               => $this->procesarFotoSubida(self::FOTO_ESTUDIANTE),
-            // El tipo de la institución de procedencia se resuelve en validate(),
-            // donde se compara el grado. El grado se pasa por id porque su
-            // número se deduce del nombre del catálogo.
-            'id_grado'           => $idGrado,
-            'ult_grado_cursado' => $this->capitalizarTitulo(trim($source['ultimo_grado_cursado'] ?? '')),
-            'es_primer_ingreso' => isset($source['ingreso_primera_vez']) ? 1 : 0,
-            'anio_escolar_pre'  => trim($source['anio_escolar_procedencia'] ?? ''),
-            'id_institucion'    => (int) ($source['id_institucion'] ?? 0),
+            // La foto inicializa en null; se procesa en store() si la validación es exitosa.
+            'foto'                    => null,
+            'id_grado'                => $idGrado,
+            'ult_grado_cursado'       => $this->capitalizarTitulo($raw('ultimo_grado_cursado')),
+            'es_primer_ingreso'       => isset($source['ingreso_primera_vez']) ? 1 : 0,
+            'anio_escolar_pre'        => $this->normalizarEspacios($raw('anio_escolar_procedencia')),
+            'id_institucion'          => (int) ($source['id_institucion'] ?? 0),
             'id_estructura_academica' => $estructuraId,
-            // Errores de la combinación: validate() los suma a los suyos (mismo 422).
-            'errores_combinacion'  => $erroresCombo,
-            // El menor no lleva contacto ni dirección: son los de su
-            // representante y viajan dentro de cada familiar.
+            'errores_combinacion'     => $erroresCombo,
+
             'talla_uniforme' => [
-                // Tallas en mayúsculas y sin espacios (" m " -> "M").
-                'camisa'       => mb_strtoupper(trim($source['talla_camisa'] ?? ''), 'UTF-8') ?: null,
-                'pantalon'     => mb_strtoupper(trim($source['talla_pantalon'] ?? ''), 'UTF-8') ?: null,
-                'zapato'       => mb_strtoupper(trim($source['talla_zapato'] ?? ''), 'UTF-8') ?: null,
-                'observaciones' => $this->vacioComoNull($source['talla_observaciones'] ?? ''),
+                'camisa'        => $this->vacioComoNull($this->aMayusculas($raw('talla_camisa'))),
+                'pantalon'      => $this->vacioComoNull($this->aMayusculas($raw('talla_pantalon'))),
+                'zapato'        => $this->vacioComoNull($this->aMayusculas($raw('talla_zapato'))),
+                'observaciones' => $this->vacioComoNull($this->capitalizarOracion($raw('talla_observaciones'))),
             ],
+
             'ficha_medica' => [
-                'condiciones_especiales' => $this->vacioComoNull($source['condiciones_especiales'] ?? ''),
-                'medicamentos'           => $this->vacioComoNull($source['medicamentos'] ?? ''),
-                'observaciones'          => $this->vacioComoNull($source['observaciones_medicas'] ?? ''),
-                'alergias'               => $this->vacioComoNull($source['alergias'] ?? ''),
-                'enfermedades'           => $this->vacioComoNull($source['enfermedades'] ?? ''),
-                'tipo_sangre'            => $this->vacioComoNull($source['tipo_sangre'] ?? ''),
+                'condiciones_especiales' => $this->vacioComoNull($this->capitalizarOracion($raw('condiciones_especiales'))),
+                'medicamentos'           => $this->vacioComoNull($this->capitalizarOracion($raw('medicamentos'))),
+                'observaciones'          => $this->vacioComoNull($this->capitalizarOracion($raw('observaciones_medicas'))),
+                'alergias'               => $this->vacioComoNull($this->capitalizarOracion($raw('alergias'))),
+                'enfermedades'           => $this->vacioComoNull($this->capitalizarOracion($raw('enfermedades'))),
+                'tipo_sangre'            => $this->vacioComoNull($this->aMayusculas($raw('tipo_sangre'))),
             ],
-            'familiares' => $familiares,
-            // Si la cédula escolar no se pudo calcular, validate() reporta este motivo.
+
+            'familiares'           => $familiares,
+            'recaudos'             => $this->decodificarRecaudos($source['recaudos'] ?? []),
             'cedula_escolar_error' => $documento['error'],
         ];
     }
 
     /**
-     * Decide el documento del estudiante. Con tipo V o E se usa el que escribió
-     * el wizard; con CE se genera la cédula escolar a partir del representante
-     * legal (paso 6) y del orden del hijo, que cuenta el modelo.
-     *
-     * @param array $source     $_POST del wizard.
-     * @param array $familiares Ya normalizado por decodificarFamiliares().
-     *
-     * @return array{tipo_documento: string, numero_documento: string, error: ?string}
-     */
+ * Normaliza el bloque de recaudos del paso 5.
+ *
+ * Llega como recaudos[<id_tipo_documento>][consignado|observacion]. Se limpian aquí los
+ * tipos de dato, pero NO se decide cuáles son válidos: eso lo hace el modelo contra el
+ * catálogo, que es el único que puede saber si un id existe y está activo. Aceptar el id
+ * tal como viene del formulario dejaría la puerta abierta a guardar un recaudo inventado.
+ *
+ * @return array<int, array{consignado: int, observacion: string}>
+*/
+    protected function decodificarRecaudos($crudo): array
+    {
+        if (!is_array($crudo)) {
+            return [];
+        }
+
+        $recaudos = [];
+        foreach ($crudo as $id => $estado) {
+            $id = (int) $id;
+            if ($id <= 0 || !is_array($estado)) {
+                continue;
+            }
+            $recaudos[$id] = [
+                'consignado'  => !empty($estado['consignado']) ? 1 : 0,
+                /* normalizarEspacios quita HTML y colapsa espacios, igual que el resto de
+ textos libres del alta: la observación es un campo de texto que escribe la
+ secretaria y se vuelve a mostrar en la ficha. Sin limpiar, un "<script>"
+ quedaría guardado y se ejecutaría al abrir la ficha del estudiante.
+ El mb_substr va después porque normalizarEspacios no acota la longitud.*/
+                'observacion' => mb_substr(
+                    $this->normalizarEspacios((string) ($estado['observacion'] ?? '')),
+                    0,
+                    255
+                ),
+            ];
+        }
+
+        return $recaudos;
+    }
+
+    /**
+ * Decide el documento del estudiante y lo sanitiza con TextoTrait.
+ *
+ * Para una cédula escolar (CE) el número se genera a partir del representante
+ * legal, que tiene que traer una cédula V o E válida: la letra de la cédula escolar
+ * sale de la suya, y un representante con tipo CE (o sin número) no sirve de base.
+*/
     private function resolverDocumentoEstudiante(array $source, array $familiares): array
     {
         $resultado = [
-            'tipo_documento'   => trim($source['tipo_documento'] ?? ''),
-            // Acepta prefijo V/E, pero se guarda solo con los dígitos.
-            'numero_documento' => Documento::normalizar(trim($source['numero_documento'] ?? '')),
+            'tipo_documento'   => $this->normalizarEspacios((string) ($source['tipo_documento'] ?? '')),
+            'numero_documento' => Documento::normalizar($this->normalizarEspacios((string) ($source['numero_documento'] ?? ''))),
             'error'            => null,
         ];
 
-        // El tipo de documento es la decisión: solo CE genera la cédula escolar.
         if ($resultado['tipo_documento'] !== 'CE') {
             return $resultado;
         }
 
         $resultado['numero_documento'] = '';
-
         $representante = $this->representanteLegal($familiares);
 
         if ($representante === null) {
             $resultado['error'] = 'Para generar la cédula escolar debe registrar un representante legal '
                 . 'con su número de documento (paso 6, representante legal).';
-
             return $resultado;
         }
 
         $cedulaRepresentante = (string) ($representante['numero_documento'] ?? '');
+        $tipoRepresentante   = (string) ($representante['tipo_documento'] ?? '');
+
+        if ($cedulaRepresentante === '' || $this->errorTipoDocumento($tipoRepresentante, ['V', 'E']) !== null) {
+            $resultado['error'] = 'Para generar la cédula escolar, el representante legal debe tener '
+                . 'una cédula V o E válida (paso 6, representante legal).';
+            return $resultado;
+        }
+
+        $fechaNacimiento = trim((string) ($source['fecha_nacimiento'] ?? ''));
 
         try {
-            // El orden del hijo se deduce de los hermanos ya registrados con
-            // ese año de nacimiento (InscripcionesModel::proximoOrdenHermano()).
             $resultado['numero_documento'] = CedulaEscolar::generar(
-                $this->modelo()->proximoOrdenHermano($cedulaRepresentante, trim($source['fecha_nacimiento'] ?? '')),
-                trim($source['fecha_nacimiento'] ?? ''),
+                $this->modelo()->proximoOrdenHermano($cedulaRepresentante, $fechaNacimiento),
+                $fechaNacimiento,
                 $cedulaRepresentante,
-                (string) ($representante['tipo_documento'] ?? '')
+                $tipoRepresentante
             );
         } catch (InvalidArgumentException $e) {
             $resultado['error'] = $e->getMessage();
@@ -243,52 +357,64 @@ class InscripcionesController extends CrudController
         return $resultado;
     }
 
-    /**
-     * Un nivel de la cascada de ubicación para la dirección del familiar.
-     * Mismo flujo que EmpleadoController::getUbicacion(), vía
-     * UbicacionTrait::getUbicacionComun().
-     */
     public function getUbicacion(): void
     {
         $this->getUbicacionComun('Inscripciones');
     }
 
     /**
-     * Guarda la inscripción y responde 422 si el cupo se agotó.
-     * El cupo se revisa en validate() y otra vez dentro de la transacción
-     * (reservarCupo()), que es la que decide ante peticiones simultáneas.
-     */
+ * Guarda la inscripción.
+ * Retrasa la subida de la foto hasta que todo sea válido. Si la BD o
+ * los cupos fallan durante el try/catch, borra la foto del disco.
+*/
     public function store(): void
     {
         $model = $this->getModel();
         $data  = $this->extractData($_POST);
+        // Quién inscribe: lo necesita la bitácora del proceso, no se guarda en la matrícula.
+        $data['id_usuario'] = (int) ($this->idUsuarioActual() ?? 0);
 
         $errors = $this->validate($data);
         if (!empty($errors)) {
             $this->jsonResponse(false, $errors, 'Hay errores en el formulario.', 422);
         }
 
+        // Subimos la foto SOLO si el formulario pasó todas las reglas.
+        $data['foto'] = $this->procesarFotoSubida(self::FOTO_ESTUDIANTE);
+
         try {
             $model->create($data);
-        } catch (CupoAgotadoException $e) {
-            $this->jsonResponse(
-                false,
-                $e->campo() !== null ? [$e->campo() => $e->getMessage()] : null,
-                $e->getMessage(),
-                422
-            );
-        } catch (Throwable $e) {
+        } catch (AnioEscolarCerradoException $e) {
+            /* El año de la estructura elegida ya no admite inscripciones.
+ Es un 403 y no un 422: el formulario está bien, lo que no se permite es la
+ operación sobre ese período. Un 422 dejaría a la secretaria corrigiendo
+ campos de un formulario que no tiene nada de malo.*/
+            if ($data['foto'] !== null) {
+                $this->borrarFoto($data['foto']);
+            }
+            $this->jsonResponse(false, null, $e->getMessage(), 403);
+        } catch (CupoAgotadoException | Throwable $e) {
+
+            // Revertir la foto subida en caso de excepción
+            if ($data['foto'] !== null) {
+                $this->borrarFoto($data['foto']);
+            }
+
+            if ($e instanceof CupoAgotadoException) {
+                $this->jsonResponse(
+                    false,
+                    $e->campo() !== null ? [$e->campo() => $e->getMessage()] : null,
+                    $e->getMessage(),
+                    422
+                );
+            }
+
             $this->jsonError($e, static::class);
         }
 
         $this->jsonResponse(true, null, 'Registro creado correctamente.');
     }
 
-    /**
-     * Alta rápida de la institución de procedencia (paso 2 del wizard).
-     * Solo acepta tipos de estudiante (preescolar o escuela); el servidor
-     * no confía en el <select>. El límite de grado se valida al guardar.
-     */
     public function guardarInstitucion(): void
     {
         $this->guardarInstitucionComun(
@@ -298,78 +424,73 @@ class InscripcionesController extends CrudController
         );
     }
 
-    /**
-     * El familiar marcado como representante legal, o null si no hay.
-     *
-     * @param array $familiares Ya normalizado por decodificarFamiliares().
-     */
-    private function representanteLegal(array $familiares): ?array
-    {
-        foreach ($familiares as $familiar) {
-            if ((int) ($familiar['representante_principal'] ?? 0) === 1) {
-                return $familiar;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Errores por campo del alta: combinación grado/sección/turno, documento,
-     * datos del estudiante, familiares y grado de procedencia.
-     */
-    protected function validate(array $data): array
+    protected function validate(array $data, ?int $ignorarId = null): array
     {
         $errores = [];
 
-        // Los errores de la combinación ya los resolvió extractData().
         foreach (($data['errores_combinacion'] ?? []) as $campo => $mensaje) {
             $errores[$campo] = $mensaje;
         }
 
         $p = $data['persona'];
 
-        // El formato del número depende del tipo de documento. Si la cédula
-        // escolar no se pudo generar, su motivo va antes que el de formato.
         if ($data['cedula_escolar_error'] !== null) {
             $errores['numero_documento'] = $data['cedula_escolar_error'];
         } else {
+            // El mensaje lo pone el modelo: el mismo "documento repetido" quiere decir tres
+            // cosas distintas según quién lo tiene registrado, y quien inscribe tiene que
+            // saber a qué módulo ir en cada caso.
             $this->validarDocumento(
                 ['tipo_documento' => $p['tipo_documento'], 'numero_documento' => $p['numero_documento']],
                 $errores,
                 ['V', 'E', 'CE'],
                 null,
-                'Ya existe un estudiante con ese número de documento.'
+                $this->modelo()->descripcionDocumentoExistente($p['numero_documento'])
+                    ?? 'Ese número de documento ya está registrado en el sistema.'
             );
         }
 
-        // Edad del estudiante: 5 a 14 años (preescolar y primaria).
         $this->validarFechaNacimiento($p, $errores, 'fecha_nacimiento', 5, 14);
+        $this->validarLugarNacimiento($p, $errores, true);
+        $this->validarNacionalidad($p, $errores);
+
         if ($p['primer_nombre'] === '') {
             $errores['primer_nombre'] = 'Indique el primer nombre.';
         }
         if ($p['primer_apellido'] === '') {
             $errores['primer_apellido'] = 'Indique el primer apellido.';
         }
-        // Contacto y domicilio se validan en los familiares, no en el menor.
-        $this->validarRepresentanteLegal($data['familiares'], $errores);
-        if ($data['id_estructura_academica'] <= 0) {
+
+        /* El tipo de sangre es un ENUM en la base. Sin esta comprobación, un valor fuera de la
+ lista llega al INSERT y MariaDB solo avisa ("Data truncated") y guarda un valor
+ vacío: la secretaria ve un error 500 sin explicación cuando
+ el problema es un dato mal escrito. El <select> de la pantalla solo ofrece las
+ opciones correctas, pero el servidor no puede depender del formulario.*/
+        if ($data['ficha_medica']['tipo_sangre'] !== null
+            && !in_array($data['ficha_medica']['tipo_sangre'], self::TIPOS_SANGRE, true)) {
+            $errores['tipo_sangre'] = 'Seleccione un tipo de sangre de la lista.';
+        }
+
+        $this->validarFamiliares($data['familiares'], $errores);
+
+        /* Solo si no hay un motivo mejor ya calculado. extractData() ya sabe decir por qué no
+ hay estructura (por ejemplo que no hay año escolar activo), y este mensaje de
+ abajo es el último recurso: aplicarlo siempre pisaba el motivo real y la
+ secretaria veía "cree la estructura" cuando lo que faltaba era abrir el período.*/
+        if ($data['id_estructura_academica'] <= 0 && !isset($errores['id_grado'])) {
             $errores['id_grado'] = 'La sección no existe para esa combinación en el período activo. '
                 . 'Cree primero la estructura académica.';
         }
+        if ($data['id_estructura_academica'] > 0
+            && !$this->secretariaTieneAccesoAEstructura((int) $data['id_estructura_academica'])) {
+            $errores['id_turno'] = 'Solo puede registrar estudiantes en su turno asignado.';
+        }
+
         $this->validarGradoProcedencia($data, $errores);
 
         return $errores;
     }
 
-    /**
-     * Valida el grado de procedencia según el tipo de institución
-     * (Instituciones::validarGradoProcedencia()). Va al final del wizard
-     * porque el grado a cursar se pide después, en el paso 3.
-     *
-     * @param array<string, mixed> $data
-     * @param array<string, string> $errores
-     */
     private function validarGradoProcedencia(array $data, array &$errores): void
     {
         if ($data['id_institucion'] <= 0) {
@@ -389,297 +510,23 @@ class InscripcionesController extends CrudController
         }
     }
 
-    /**
-     * Caché de nombres de parentesco activos: se consulta una sola vez por guardado.
-     *
-     * @var array<string, true>|null
-     */
-    private ?array $nombresParentesco = null;
-
-    /**
-     * ¿El parentesco es padre o madre? Compara por nombre (no por id) para
-     * no depender del catálogo; misma regla que esPadreOMadreSegun en enrollments.js.
-     */
-    private function esPadreOMadre(string $parentesco): bool
-    {
-        $nombre = mb_strtolower(trim($parentesco));
-
-        return $nombre === 'madre' || $nombre === 'padre';
-    }
-
-    /** ¿Ese nombre de parentesco está en el catálogo activo? */
-    private function existeParentesco(string $nombre): bool
-    {
-        if ($this->nombresParentesco === null) {
-            $stmt = $this->conexion()->query("SELECT nombre FROM parentesco WHERE estado = 'ACTIVO'");
-            $this->nombresParentesco = [];
-            foreach ($stmt->fetchAll(\PDO::FETCH_COLUMN) as $activo) {
-                $this->nombresParentesco[(string) $activo] = true;
-            }
-        }
-
-        return isset($this->nombresParentesco[$nombre]);
-    }
-
-
-    /**
-     * Reglas de familiares y representante legal: uno y solo un representante;
-     * todos con parentesco válido (salvo "no es familiar") y teléfono principal;
-     * el representante además con domicilio completo y fecha de nacimiento (18-100).
-     *
-     * @param array $familiares Ya normalizado por decodificarFamiliares().
-     * @param array $errores    Errores por campo, por referencia.
-     */
-    private function validarRepresentanteLegal(array $familiares, array &$errores): void
-    {
-        if ($familiares === []) {
-            $errores['familiares'] = 'Debe registrar al menos un familiar.';
-
-            return;
-        }
-
-        $representantes = array_values(array_filter(
-            $familiares,
-            fn($familiar) => (int) ($familiar['representante_principal'] ?? 0) === 1
-        ));
-
-        if ($representantes === []) {
-            $errores['familiares'] = 'Debe marcar un familiar como representante legal.';
-
-            return;
-        }
-
-        if (count($representantes) > 1) {
-            $errores['familiares'] = 'Solo puede haber un representante legal por estudiante; '
-                . 'deje marcado uno solo.';
-
-            return;
-        }
-
-        $erroresRol = [];
-
-        foreach ($familiares as $indice => $familiar) {
-            $esRepresentante  = (int) ($familiar['representante_principal'] ?? 0) === 1;
-            $soloAutorizado   = (bool) ($familiar['solo_autorizado'] ?? false);
-            $parentesco       = trim((string) ($familiar['parentesco'] ?? ''));
-            $contacto  = $familiar['contacto']  ?? [];
-            $faltantes = [];
-
-            // Quien no es familiar solo puede estar autorizado para retirar:
-            // no puede ser además el representante legal.
-            if ($soloAutorizado && $esRepresentante) {
-                $erroresRol[] = 'Una persona sin parentesco no puede ser el representante '
-                    . 'legal: márquela como autorizada para retiros o deja de marcar '
-                    . 'el representante.';
-
-                continue;
-            }
-
-            // El parentesco es obligatorio, salvo con el interruptor "no es familiar".
-            if (!$soloAutorizado && $parentesco === '') {
-                $erroresRol[] = 'Falta el parentesco con el estudiante: márquelo en el '
-                    . 'campo de parentesco, o active "no es familiar" si no tiene '
-                    . 'ningún vínculo.';
-
-                continue;
-            }
-
-            // Debe existir en el catálogo: si no, el modelo lo guardaría como
-            // NULL sin avisar (catálogo cambiado o JSON armado a mano).
-            if ($parentesco !== '' && !$this->existeParentesco($parentesco)) {
-                $erroresRol[] = 'El parentesco "' . $parentesco . '" no existe en el '
-                    . 'catálogo. Revise la lista de parentescos.';
-
-                continue;
-            }
-
-            // Teléfono y correo con las mismas reglas que empleados: se
-            // remapean las claves cortas del familiar a las de
-            // ContactoValidacionTrait. El 3.er parámetro es $esObligatorio (bool).
-            $erroresContacto = [];
-            $this->validarContacto(
-                [
-                    'contacto' => [
-                        'codigo_telefono_principal'   => $contacto['codigo'] ?? '',
-                        'numero_telefono_principal'   => $contacto['numero'] ?? '',
-                        'codigo_telefono_alternativo' => $contacto['codigo_alt'] ?? '',
-                        'numero_telefono_alternativo' => $contacto['numero_alt'] ?? '',
-                        'correo_electronico'          => $contacto['correo'] ?? '',
-                    ],
-                ],
-                $erroresContacto,
-                true
-            );
-
-            if (isset($erroresContacto['numero_telefono_principal'], $erroresContacto['codigo_telefono_principal'])) {
-                $faltantes[] = 'el teléfono principal (prefijo y número válidos)';
-            } elseif (isset($erroresContacto['numero_telefono_principal'])) {
-                $faltantes[] = 'un teléfono principal con 7 dígitos';
-            } elseif (isset($erroresContacto['codigo_telefono_principal'])) {
-                $faltantes[] = 'un prefijo válido para el teléfono principal';
-            }
-
-            if (isset($erroresContacto['numero_telefono_alternativo']) || isset($erroresContacto['codigo_telefono_alternativo'])) {
-                $faltantes[] = 'un teléfono alternativo válido (o dejarlo vacío)';
-            }
-
-            if (isset($erroresContacto['correo_electronico'])) {
-                $faltantes[] = 'un correo electrónico válido';
-            }
-
-            // Domicilio y fecha de nacimiento: solo los exige el representante.
-            if ($esRepresentante) {
-                $direccion = $familiar['direccion'] ?? [];
-
-                foreach (['sector' => 'el sector', 'calle' => 'la calle', 'casa' => 'el número de casa'] as $campo => $etiqueta) {
-                    if (trim((string) ($direccion[$campo] ?? '')) === '') {
-                        $faltantes[] = $etiqueta;
-                    }
-                }
-
-                // Solo se guarda id_parroquia; estado y municipio son pasos de la cascada.
-                if ((int) ($direccion['id_parroquia'] ?? 0) <= 0) {
-                    $faltantes[] = 'la parroquia (seleccione estado, municipio y parroquia)';
-                }
-
-                // Array aparte: la clave 'fecha_nacimiento' pisaría la del estudiante.
-                $erroresFecha = [];
-                $this->validarFechaNacimiento($familiar, $erroresFecha, 'fecha_nacimiento', 18, 100);
-                if (isset($erroresFecha['fecha_nacimiento'])) {
-                    $faltantes[] = 'una fecha de nacimiento válida (mayor de edad)';
-                }
-            }
-
-            if ($faltantes !== []) {
-                $quien = $esRepresentante ? 'El representante legal' : 'El familiar';
-                $erroresRol[] = $quien . ' necesita ' . implode(', ', $faltantes) . '.';
-            }
-
-            unset($indice);
-        }
-
-        if ($erroresRol !== []) {
-            $errores['familiares'] = implode(' ', $erroresRol);
-        }
-    }
-
-    /** Cadena vacía (o solo espacios) a null; el resto, recortado. */
+    /** Helper interno que pasa los valores nulos o vacíos limpios.*/
     private function vacioComoNull(mixed $valor): ?string
     {
-        $texto = trim((string) $valor);
-
+        $texto = $this->normalizarEspacios((string) $valor);
         return $texto !== '' ? $texto : null;
     }
 
     /**
-     * Decodifica y normaliza los familiares de `familiares_json`.
-     * Cada uno trae `contacto` y `direccion`; solo el representante los
-     * usa, porque el menor no tiene datos propios (paso 6 del wizard).
-     */
-    private function decodificarFamiliares(mixed $raw): array
-    {
-        if (!is_string($raw) || trim($raw) === '') {
-            return [];
-        }
-
-        $familiares = json_decode($raw, true);
-
-        if (!is_array($familiares)) {
-            return [];
-        }
-
-        foreach ($familiares as &$familiar) {
-            if (!is_array($familiar)) {
-                $familiar = [];
-                continue;
-            }
-
-            // "No es familiar": solo autorizado para retirar. Si viene marcado
-            // se descarta el parentesco (no se puede tener ambos).
-            $familiar['solo_autorizado'] = (int) ($familiar['solo_autorizado'] ?? 0) === 1;
-
-            // Si vive con el menor: siempre 0 o 1, y por defecto 0 (no se da por
-            // hecho). Para el representante lo fuerza el navegador.
-            $familiar['vive_con_estudiante'] = (int) ($familiar['vive_con_estudiante'] ?? 0) === 1 ? 1 : 0;
-            if ($familiar['solo_autorizado']) {
-                $familiar['parentesco']         = '';
-                $familiar['autorizado_retiros'] = 1;
-            }
-
-            $familiar['contacto'] = [
-                'codigo'     => trim((string) ($familiar['contacto']['codigo'] ?? '')),
-                'numero'     => trim((string) ($familiar['contacto']['numero'] ?? '')),
-                'codigo_alt' => $this->vacioComoNull($familiar['contacto']['codigo_alt'] ?? ''),
-                'numero_alt' => $this->vacioComoNull($familiar['contacto']['numero_alt'] ?? ''),
-                'correo'     => $this->vacioComoNull($familiar['contacto']['correo'] ?? ''),
-            ];
-
-            // Nivel de instrucción y ocupación (por nombre de catálogo) solo se
-            // piden al representante o al padre/madre; en los demás se vacían.
-            // Se compara por nombre; el modelo aplica la misma regla.
-            $pideDatosPersonales = ((int) ($familiar['representante_principal'] ?? 0) === 1)
-                || $this->esPadreOMadre($familiar['parentesco'] ?? '');
-
-            if ($pideDatosPersonales) {
-                $familiar['nivel_instruccion'] = trim((string) ($familiar['nivel_instruccion'] ?? ''));
-                $familiar['ocupacion']         = trim((string) ($familiar['ocupacion'] ?? ''));
-            } else {
-                $familiar['nivel_instruccion'] = '';
-                $familiar['ocupacion'] = '';
-            }
-
-            // El domicilio se normaliza a las claves del modelo y de la tabla
-            // `direccion`. El sub-modal manda `parroquia`; se aceptan ambos
-            // nombres y se emite `id_parroquia`. Solo se guarda para el
-            // representante (lo aplica InscripcionesModel::insertFamiliares).
-            $direccionRecibida = $familiar['direccion'] ?? [];
-            $familiar['direccion'] = [
-                'id_parroquia' => (int) ($direccionRecibida['id_parroquia'] ?? $direccionRecibida['parroquia'] ?? 0),
-                'sector'       => trim((string) ($direccionRecibida['sector'] ?? '')),
-                'calle'        => trim((string) ($direccionRecibida['calle'] ?? '')),
-                'casa'         => trim((string) ($direccionRecibida['casa'] ?? '')),
-                'referencia'   => $this->vacioComoNull($direccionRecibida['referencia'] ?? ''),
-            ];
-
-            // La letra (V/E) se lee del valor original, antes de normalizar,
-            // para que "e-87654321" deduzca E. Sirve para la cédula escolar.
-            $documentoCrudo = trim((string) ($familiar['numero_documento'] ?? ''));
-            $familiar['tipo_documento']  = mb_strtoupper(trim((string) ($familiar['tipo_documento'] ?? '')), 'UTF-8');
-
-            // El representante lo decide el interruptor del sub-modal; se
-            // normaliza aquí porque el JSON viene del cliente. Siempre puede
-            // retirar al estudiante, así que su permiso se marca solo.
-            $familiar['representante_principal'] = (int) ($familiar['representante_principal'] ?? 0) === 1 ? 1 : 0;
-
-            if ($familiar['representante_principal'] === 1) {
-                $familiar['autorizado_retiros'] = 1;
-            } else {
-                $familiar['autorizado_retiros'] = (int) ($familiar['autorizado_retiros'] ?? 0) === 1 ? 1 : 0;
-            }
-            $familiar['numero_documento'] = Documento::normalizar($documentoCrudo);
-
-            if (
-                !in_array($familiar['tipo_documento'], Documento::TIPOS_CEDULA, true)
-                && Documento::esCedula($familiar['numero_documento'])
-            ) {
-                $familiar['tipo_documento'] = Documento::letraDe($documentoCrudo, Documento::LETRA_POR_DEFECTO);
-            }
-            $familiar['sexo']             = ($familiar['sexo'] ?? 'M') === 'F' ? 'F' : 'M';
-
-            // Solo se recorta; el formato y el rango (18-100 años) se validan en
-            // validarRepresentanteLegal().
-            $familiar['fecha_nacimiento'] = trim((string) ($familiar['fecha_nacimiento'] ?? ''));
-        }
-        unset($familiar);
-
-        return $familiares;
-    }
-
-    /**
-     * Busca una persona por cédula para precargar al familiar en el sub-modal.
-     * Ruta: inscripciones/buscarPersona?documento= (GET, JSON).
-     * Responde 200 (data null si no existe) o 422 si la cédula es inválida.
-     */
+ * Busca una persona por cédula para precargar al familiar en el sub-modal.
+ * Ruta: inscripciones/buscarPersona?documento= (GET, JSON).
+ * Responde 200 (data null si no existe) o 422 si la cédula es inválida.
+ *
+ * Este método es una envoltura de una línea a propósito: la consulta y el
+ * formato de la respuesta son los mismos que ratificación necesita, y la
+ * lógica está en el modelo (buscarPersonaPorDocumento), que es donde debe
+ * estar. RatificacionController::buscarPersona es igual de corto.
+*/
     public function buscarPersona(): void
     {
         $documento = Documento::normalizar(trim((string) ($_GET['documento'] ?? '')));
@@ -697,7 +544,14 @@ class InscripcionesController extends CrudController
         }
 
         try {
-            $this->jsonResponse(true, $this->modelo()->buscarPersonaPorDocumento($documento));
+            /* En el alta todavía no hay estudiante: se busca sin contexto y el
+ sub-modal usa la relación más reciente de esa persona. En ratificación
+ sí se envía, y ahí sí importa (ver PersonaModel::nivelYOcupacionDe).*/
+            $idEstudiante = (int) ($_GET['id_estudiante'] ?? 0);
+            $this->jsonResponse(true, $this->modelo()->buscarPersonaPorDocumento(
+                $documento,
+                $idEstudiante > 0 ? $idEstudiante : null
+            ));
         } catch (Throwable $e) {
             $this->jsonError($e, static::class);
         }
@@ -708,6 +562,10 @@ class InscripcionesController extends CrudController
         try {
             $id = (int) ($_GET['id'] ?? 0);
             $item = $id > 0 ? $this->modelo()->getById($id) : null;
+            $turno = $this->turnoSecretariaActual();
+            if ($item && $turno !== null && (int) ($item['id_turno'] ?? 0) !== $turno) {
+                $item = null;
+            }
             if (!$item) {
                 $this->setFlash('error', 'La inscripción solicitada no existe.');
                 $this->redirect('index');

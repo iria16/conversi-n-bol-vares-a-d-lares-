@@ -18,21 +18,21 @@
  * el texto completo al desplegarlo.
  *
  * Variables:
- * - string $tipoDocId        id del <select> (obligatorio)
- * - string $tipoDocName      name del <select> (default: 'tipo_documento')
- * - array  $tipoDocOpciones  tipos permitidos, en orden (default: V, E)
+ * - string $tipoDocId id del <select> (obligatorio)
+ * - string $tipoDocName name del <select> (default: 'tipo_documento')
+ * - array $tipoDocOpciones tipos permitidos, en orden (default: V, E)
  * - string $tipoDocSeleccionado tipo marcado; default: el primero de la lista
- * - string $tipoDocLabel     texto de la etiqueta (default: 'Tipo de documento *')
- * - bool   $tipoDocRequired  default true
- * - string $tipoDocCol       clase de columna del Bootstrap (default: 'col-4')
+ * - string $tipoDocLabel texto de la etiqueta (default: 'Tipo de documento *')
+ * - bool $tipoDocRequired default true
+ * - string $tipoDocCol clase de columna del Bootstrap (default: 'col-4')
  *
  * Tipos y lo que significan:
- *   V → cédula de identidad venezolana (la cédula escolar empieza por V)
- *   E → cédula de extranjería      (la cédula escolar empieza por E)
- *   CE → cédula escolar: la asigna la institución a un menor que todavía no
- *        tiene cédula propia, y la genera el sistema (App\Support\CedulaEscolar).
- *        Solo el estudiante la usa: ni empleados ni familiares.
- */
+ * V → cédula de identidad venezolana (la cédula escolar empieza por V)
+ * E → cédula de extranjería (la cédula escolar empieza por E)
+ * CE → cédula escolar: la asigna la institución a un menor que todavía no
+ * tiene cédula propia, y la genera el sistema (App\Support\CedulaEscolar).
+ * Solo el estudiante la usa: ni empleados ni familiares.
+*/
 $tipoDocId          = $tipoDocId ?? '';
 $tipoDocName        = $tipoDocName ?? 'tipo_documento';
 $tipoDocOpciones    = $tipoDocOpciones ?? ['V', 'E'];
@@ -41,7 +41,11 @@ $tipoDocRequired    = $tipoDocRequired ?? true;
 $tipoDocCol         = $tipoDocCol ?? 'col-4';
 
 // Textos canónicos. El ENUM de persona.tipo_documento es ('V','E','CE','P'),
-// pero 'P' (pasaporte) no se ofrece en ningún formulario.
+// pero 'P' (pasaporte) no se ofrece a propósito: la institución no lo necesita
+// y su formato es alfanumérico, que no encaja con el limpiado de las cédulas
+// (App\Support\Documento::normalizar deja solo dígitos). Si algún día hace
+// falta, no alcanza con agregar la opción acá: hay que darle su propio patrón y
+// su propia limpieza, como se hizo y se revirtió.
 $tipoDocTextos = [
     'V'  => 'V - Venezolano',
     'E'  => 'E - Extranjero',

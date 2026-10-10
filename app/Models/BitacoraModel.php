@@ -14,7 +14,7 @@ use Throwable;
  * Bitácora del sistema: registrar() audita acciones (tolerante a fallos, solo deja error_log) y el resto es lectura para la vista de auditoría.
  * Extiende Model y no BaseModel a propósito: registrar() es la única vía de escritura y no expone create/update/delete genéricos.
  * Tabla bitacora: id_bitacora, id_usuario, fecha, hora, accion (texto libre, no ENUM), modulo, direccion_ip.
- */
+*/
 class BitacoraModel extends Model implements Listable
 {
     use AvatarTrait;
@@ -27,6 +27,11 @@ class BitacoraModel extends Model implements Listable
     public function registrar(int $idUsuario, string $accion, string $modulo, ?string $ip = null): bool
     {
         try {
+            /* Recorte a la medida de las columnas. `accion` y `modulo` son varchar(100) y
+ varchar(50) y el modo es STRICT_TRANS_TABLES, así que un texto más largo no
+ se recorta: revienta la consulta y la acción que se quería auditar se queda
+ sin registro. Los mensajes se arman con nombres de alumno y de grado, que es
+ justo donde se pasan de largo.*/
             $stmt = $this->pdo->prepare(
                 'INSERT INTO bitacora (id_usuario, fecha, hora, accion, modulo, direccion_ip)
                  VALUES (:id, CURDATE(), CURTIME(), :accion, :modulo, :ip)'
@@ -34,9 +39,9 @@ class BitacoraModel extends Model implements Listable
 
             return $stmt->execute([
                 'id'     => $idUsuario,
-                'accion' => $accion,
-                'modulo' => $modulo,
-                'ip'     => $ip ?? ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0'),
+                'accion' => mb_substr($accion, 0, 100),
+                'modulo' => mb_substr($modulo, 0, 50),
+                'ip'     => mb_substr((string) ($ip ?? ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0')), 0, 45),
             ]);
         } catch (Throwable $e) {
             error_log('BitacoraModel: no se pudo registrar la acción: ' . $e->getMessage());
@@ -59,6 +64,13 @@ class BitacoraModel extends Model implements Listable
         'EDITAR'        => 'update',
         'UPDATE'        => 'update',
         'ACTUALIZACION' => 'update',
+        /* Faltaba la variante CON tilde. Sin ella, una acción que empieza por
+ "ACTUALIZACIÓN ..." caía en el último recurso de normalizarTipo() y la
+ auditoría la mostraba como "Consulta": cambiar un dato de un alumno es
+ justamente lo que esa pantalla tiene que dejar a la vista, y se escondeía
+ detrás de la etiqueta de solo leer. CREACIÓN, INSCRIPCIÓN y EXPORTACIÓN ya
+ tenían su variante acentuada; esta se había quedado sin ella.*/
+        'ACTUALIZACIÓN' => 'update',
         'ELIMINAR'      => 'delete',
         'DELETE'        => 'delete',
         'ELIMINACION'   => 'delete',
@@ -68,15 +80,61 @@ class BitacoraModel extends Model implements Listable
         'EXPORTAR'      => 'export',
         'EXPORT'        => 'export',
         'EXPORTACION'   => 'export',
+        'EXPORTACIÓN'   => 'export',
+
+        /* Procesos académicos. El nombre canónico va al principio del texto de `accion`
+ y el detalle detrás, así que lo que clasifica es el prefijo (normalizarTipo()).*/
+        'INSCRIPCIÓN'     => 'inscripcion',
+        'RATIFICACIÓN'    => 'ratificacion',
+        'SOLICITUD'       => 'retiro',
+        'RETIRO'          => 'retiro',
+        'EGRESO'          => 'egreso',
+        'INICIO'          => 'anio',
+        'CIERRE'          => 'anio',
+        /* Una reapertura del ciclo es del mismo tipo que abrirlo o cerrarlo, pero usaba una palabra que no estaba en esta lista y caía en el último recurso
+ ('query'): en la auditoría una reapertura aparecía etiquetada como "Consulta", igual que si nadie hubiera hecho nada. Y es de las acciones más
+ delicadas que hace un directivo, porque devuelve el período a un estado anterior y deshace un cierre: era justo la que más necesitaba quedar a la
+ vista.*/
+        'REAPERTURA'      => 'anio',
+        'CAMBIO_PASSWORD' => 'password',
+    ];
+
+    /**
+ * Prefijos de `accion` que pertenecen a cada tipo, para poder FILTRAR por tipo.
+ *
+ * El filtro no puede ser `accion = 'x'`: el texto lleva detrás el detalle del
+ * proceso. Con la igualdad, filtrar por "Inscripción" no encontraba nada y el
+ * desplegable acababa ofreciendo una opción por cada acción registrada.
+*/
+    private const PREFIJOS_POR_TIPO = [
+        'login'        => ["'LOGIN'", "'LOGOUT'"],
+        'password'     => ["'CAMBIO_PASSWORD'"],
+        'create'       => ["'CREAR%'", "'CREACI%'"],
+        'update'       => ["'ACTUALIZ%'", "'EDITAR%'", "'UPDATE%'"],
+        'delete'       => ["'ELIMIN%'", "'DELETE%'"],
+        'export'       => ["'EXPORT%'"],
+        'inscripcion'  => ["'INSCRIPCIÓN%'"],
+        'ratificacion' => ["'RATIFICACIÓN%'"],
+        'retiro'       => ["'SOLICITUD%'", "'RETIRO%'"],
+        'egreso'       => ["'EGRESO%'"],
+        'anio'         => ["'INICIO%'", "'CIERRE%'", "'REAPERTURA%'"],
+        // Sin prefijo conocido: cualquier otra cosa es una consulta.
+        'query'        => ["'CONSULT%'", "'QUERY%'"],
     ];
 
     private const TIPO_LABELS = [
-        'login'  => 'Inicio de sesión',
-        'create' => 'Creación',
-        'update' => 'Actualización',
-        'delete' => 'Eliminación',
-        'query'  => 'Consulta',
-        'export' => 'Exportación',
+        'login'       => 'Inicio de sesión',
+        'password'    => 'Cambio de clave',
+        'create'      => 'Creación',
+        'update'      => 'Actualización',
+        'delete'      => 'Eliminación',
+        'query'       => 'Consulta',
+'export'      => 'Exportación',
+        'inscripcion' => 'Inscripción',
+        'ratificacion' => 'Ratificación',
+        'retiro'      => 'Retiro',
+        'egreso'      => 'Egreso',
+        'anio'        => 'Ciclo escolar',
     ];
 
     private function baseSelect(): string
@@ -150,13 +208,17 @@ class BitacoraModel extends Model implements Listable
 
     public function getAccionesDisponibles(): array
     {
-        $stmt = $this->pdo->query("SELECT DISTINCT accion FROM {$this->table} ORDER BY accion");
-        $valores = $stmt->fetchAll(PDO::FETCH_COLUMN);
-
+        /* Los tipos que HAY en la tabla, no los textos crudos: el desplegable lista
+ "Inscripción", "Retiro", "Egreso"… y no una línea por cada inscripción
+ registrada, que es lo que pasaba al devolver los `accion` sin transformar.*/
         $acciones = [];
-        foreach ($valores as $valor) {
-            $acciones[$valor] = self::TIPO_LABELS[$this->normalizarTipo($valor)] ?? ucfirst(strtolower($valor));
+        $filas = $this->pdo->query("SELECT DISTINCT accion FROM {$this->table}")->fetchAll(PDO::FETCH_COLUMN);
+
+        foreach ($filas as $valor) {
+            $tipo = $this->normalizarTipo((string) $valor);
+            $acciones[$tipo] = self::TIPO_LABELS[$tipo] ?? 'Acción';
         }
+
         return $acciones;
     }
 
@@ -175,9 +237,17 @@ class BitacoraModel extends Model implements Listable
             $params['hasta'] = $filters['hasta'];
         }
 
+        /* Por tipo, no por texto exacto: `accion` lleva el detalle detrás del nombre canónico,
+ así que la igualdad dejaría el filtro sin resultados. Los valores vienen del
+ desplegable, que solo ofrece claves de PREFIJOS_POR_TIPO.*/
         if (!empty($filters['accion'])) {
-            $where[] = "b.accion = :accion";
-            $params['accion'] = $filters['accion'];
+            $tipo = (string) $filters['accion'];
+            $prefijos = self::PREFIJOS_POR_TIPO[$tipo] ?? null;
+            if ($prefijos === null) {
+                $where[] = '1 = 0';   // tipo desconocido: no se filtra a la ligera, se muestra vacío
+            } else {
+                $where[] = '(b.accion LIKE ' . implode(' OR b.accion LIKE ', $prefijos) . ')';
+            }
         }
 
         if (!empty($filters['search'])) {
@@ -215,7 +285,11 @@ class BitacoraModel extends Model implements Listable
             'iniciales'     => $avatar['iniciales'],
             'avatar_color'  => $avatar['avatar_color'],
             'accion'        => $tipo,
-            'accion_label'  => self::TIPO_LABELS[$tipo] ?? ucfirst(strtolower($row['accion'])),
+            'accion_label'  => self::TIPO_LABELS[$tipo] ?? 'Acción',
+            // El texto completo de la acción: el badge muestra el tipo y este lleva el
+            // detalle (a quién se inscribió o retiró, a qué grado pasó), que es
+            // lo que hace útil la auditoría y lo único que queda tras el badge.
+            'detalle'       => $row['accion'] ?? '',
             'modulo'        => $row['modulo'],
             'ip'            => $row['direccion_ip'],
         ];
@@ -223,8 +297,12 @@ class BitacoraModel extends Model implements Listable
 
     private function normalizarTipo(string $accion): string
     {
-        $clave = strtoupper(trim($accion));
-        return self::TIPOS_CONOCIDOS[$clave] ?? 'query';
+        /* Solo la primera palabra decide el tipo. `accion` es texto libre y los procesos
+ académicos escriben el detalle detrás del nombre canónico ("INSCRIPCIÓN Ana
+ Pérez (V-1) · 1er Grado · A · Tarde"); con la comparación exacta de antes, todo
+ eso caía en 'query' y la auditoría mostraba "Consulta" encima de una inscripción.*/
+        $primera = strtok(mb_strtoupper(trim($accion), 'UTF-8'), " \t\n\r");
+        return self::TIPOS_CONOCIDOS[(string) $primera] ?? 'query';
     }
 
     public function countHoy(): int

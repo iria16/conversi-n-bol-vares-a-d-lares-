@@ -9,9 +9,11 @@ $breadcrumbs = [
 ];
 $stats = $stats ?? ['total' => 0, 'asignadas' => 0, 'pendientes' => 0, 'docentes' => 0];
 $asignaciones = $asignaciones ?? [];
-$anios = $anios ?? [];
+$anioActivo = $anioActivo ?? 'No hay un año escolar activo';
 $grados = $grados ?? [];
 $secciones = $secciones ?? [];
+$turnos = $turnos ?? [];
+$filters = $filters ?? [];
 $estructuras = $estructuras ?? [];
 $docentes = $docentes ?? [];
 $tiposAsignacion = $tiposAsignacion ?? [];
@@ -60,7 +62,7 @@ ob_start();
             'icon'      => 'bi-people',
             'tone'      => 'light',
             'variant'   => 'highlighted',
-            'trend'     => 'Disponibles',
+            'trend'     => 'En plantilla',
             'trendType' => 'neutral',
         ],
     ];
@@ -87,21 +89,16 @@ ob_start();
 
   ob_start();
   ?>
-  <label for="filtroAnio" class="visually-hidden">Año escolar</label>
-  <select id="filtroAnio" name="anio" class="form-select" aria-label="Filtrar por año">
-    <option value="">Año escolar (Todos)</option>
-    <?php foreach ($anios as $option): ?>
-      <option value="<?= (int) $option['id'] ?>" <?= (string) ($_GET['anio'] ?? '') === (string) $option['id'] ? 'selected' : '' ?>>
-        <?= htmlspecialchars($option['nombre']) ?>
-      </option>
-    <?php endforeach; ?>
-  </select>
+  <div class="data-panel__active-year" role="status" aria-label="Año escolar activo: <?= htmlspecialchars($anioActivo) ?>">
+    <i class="bi bi-calendar3" aria-hidden="true"></i>
+    <strong><?= htmlspecialchars($anioActivo) ?></strong>
+  </div>
 
   <label for="filtroGrado" class="visually-hidden">Grado</label>
   <select id="filtroGrado" name="grado" class="form-select" aria-label="Filtrar por grado">
     <option value="">Grado (Todos)</option>
     <?php foreach ($grados as $option): ?>
-      <option value="<?= (int) $option['id'] ?>" <?= (string) ($_GET['grado'] ?? '') === (string) $option['id'] ? 'selected' : '' ?>>
+      <option value="<?= (int) $option['id'] ?>" <?= (string) ($filters['grado'] ?? '') === (string) $option['id'] ? 'selected' : '' ?>>
         <?= htmlspecialchars($option['nombre']) ?>
       </option>
     <?php endforeach; ?>
@@ -111,7 +108,17 @@ ob_start();
   <select id="filtroSeccion" name="seccion" class="form-select" aria-label="Filtrar por sección">
     <option value="">Sección (Todas)</option>
     <?php foreach ($secciones as $option): ?>
-      <option value="<?= (int) $option['id'] ?>" <?= (string) ($_GET['seccion'] ?? '') === (string) $option['id'] ? 'selected' : '' ?>>
+      <option value="<?= (int) $option['id'] ?>" <?= (string) ($filters['seccion'] ?? '') === (string) $option['id'] ? 'selected' : '' ?>>
+        <?= htmlspecialchars($option['nombre']) ?>
+      </option>
+    <?php endforeach; ?>
+  </select>
+
+  <label for="filtroTurno" class="visually-hidden">Turno</label>
+  <select id="filtroTurno" name="turno" class="form-select" aria-label="Filtrar por turno">
+    <option value="">Turno (Todos)</option>
+    <?php foreach ($turnos as $option): ?>
+      <option value="<?= (int) $option['id'] ?>" <?= (string) ($filters['turno'] ?? '') === (string) $option['id'] ? 'selected' : '' ?>>
         <?= htmlspecialchars($option['nombre']) ?>
       </option>
     <?php endforeach; ?>
@@ -119,7 +126,7 @@ ob_start();
   <?php
   $panelFilters           = ob_get_clean();
   $panelSearchName        = 'q';
-  $panelSearchValue       = $_GET['q'] ?? '';
+  $panelSearchValue       = $filters['q'] ?? '';
   $panelSearchPlaceholder = 'Buscar por docente o grado...';
 
   // ---------- Data panel: colgroup ----------
@@ -197,6 +204,9 @@ ob_start();
             class="action-btn action-btn--edit editar-asignacion"
             data-id="<?= $estructuraId ?>"
             data-asignacion-id="<?= $asignacionId ?>"
+            data-docente-id="<?= (int) ($item['id_docente'] ?? 0) ?>"
+            data-tipo-id="<?= (int) ($item['id_tipo_asignacion'] ?? 0) ?>"
+            data-fecha-inicio="<?= htmlspecialchars($item['fecha_inicio'] ?? '') ?>"
             title="Asignar o editar docente">
             <i class="bi bi-pencil"></i>
           </button>

@@ -2,10 +2,10 @@
 
 /**
  * Paso 4 - Información laboral.
- * Variable en scope: $cargos (tabla `cargo`).
+ * Variables en scope: $cargos y $turnos.
  * Nota de diseño: la BD aún no tiene tabla de Departamento/Área de adscripción;
  * cuando exista, el <select> nuevo va en este paso (no en la interfaz de usuario).
- */
+*/
 ?>
 <section class="wizard-summary__section">
   <div class="wizard-summary__section-header">
@@ -33,6 +33,16 @@
           min="1980-01-01"
           max="<?= date('Y-m-d') ?>"
           required>
+      </div>
+      <div class="col-md-6">
+        <label class="label-sigde" for="turnoEmpleado">Turno de trabajo</label>
+        <select class="form-select" id="turnoEmpleado" name="id_turno">
+          <option value="">Sin turno asignado</option>
+          <?php foreach ($turnos as $turno): ?>
+            <option value="<?= (int) $turno['id_turno'] ?>"><?= htmlspecialchars($turno['nombre']) ?></option>
+          <?php endforeach; ?>
+        </select>
+        <div class="form-text">Déjelo vacío para cargos generales que no dependen de un turno.</div>
       </div>
     </div>
   </div>

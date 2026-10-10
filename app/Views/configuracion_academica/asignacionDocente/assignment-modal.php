@@ -7,7 +7,7 @@
  * Variables desde la vista index:
  * - $modalId, $modalTitle, $modalSubtitle, $formId
  * - $estructuras, $docentes, $tiposAsignacion ([id, nombre])
- */
+*/
 $formId = $formId ?? 'formNuevaAsignacion';
 $editMode = $editMode ?? str_starts_with($formId, 'formEditar');
 $estructuras = $estructuras ?? [];
@@ -16,7 +16,10 @@ $tiposAsignacion = $tiposAsignacion ?? [];
 ob_start();
 ?>
 <form id="<?= htmlspecialchars($formId) ?>" novalidate>
-  <?php if ($editMode): ?><input type="hidden" name="id_estructura_academica" id="editarAsignacionEstructura"><?php endif; ?>
+  <?php if ($editMode): ?>
+    <input type="hidden" name="id_estructura_academica" id="editarAsignacionEstructura">
+    <input type="hidden" name="id_asignacion" id="editarAsignacionId">
+  <?php endif; ?>
 
   <section class="wizard-summary__section">
     <div class="wizard-summary__section-header">
@@ -30,7 +33,7 @@ ob_start();
           <select name="id_estructura_academica" id="nuevoAsignacionSeccion" class="form-select" required>
             <option value="">Seleccione una sección...</option>
             <?php foreach ($estructuras as $item): ?>
-              <option value="<?= (int) $item['id'] ?>"><?= htmlspecialchars($item['nombre']) ?></option>
+              <option value="<?= (int) $item['id'] ?>" data-id-turno="<?= (int) $item['id_turno'] ?>"><?= htmlspecialchars($item['nombre']) ?></option>
             <?php endforeach; ?>
           </select>
           <div class="invalid-feedback">Seleccione la sección académica.</div>
@@ -39,10 +42,7 @@ ob_start();
       <div class="mb-3">
         <label class="label-sigde" for="<?= $editMode ? 'editar' : 'nuevo' ?>AsignacionDocente">Docente</label>
         <select name="id_docente" id="<?= $editMode ? 'editar' : 'nuevo' ?>AsignacionDocente" class="form-select" required>
-          <option value="">Seleccione un docente...</option>
-          <?php foreach ($docentes as $item): ?>
-            <option value="<?= (int) $item['id'] ?>"><?= htmlspecialchars($item['nombre']) ?><?= !empty($item['cargo']) ? ' · ' . htmlspecialchars($item['cargo']) : '' ?></option>
-          <?php endforeach; ?>
+          <option value=""><?= $editMode ? 'Cargando docentes...' : 'Seleccione primero una sección...' ?></option>
         </select>
         <div class="invalid-feedback">Seleccione el docente.</div>
       </div>

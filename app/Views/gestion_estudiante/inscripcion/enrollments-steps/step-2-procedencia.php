@@ -1,22 +1,22 @@
 <?php
 /**
  * Paso 2 - Procedencia.
- * Variables del controlador: $instituciones  array [ ['id'=>..,'nombre'=>..] ]
- *                            $gradosModal     array [ ['id'=>..,'nombre'=>..] ]
+ * Variables del controlador: $instituciones array [ ['id'=>..,'nombre'=>..] ]
+ * $gradosModal array [ ['id'=>..,'nombre'=>..] ]
  * El bloque de procedencia se oculta desde enrollments.js cuando el alumno
  * ingresa por primera vez.
  *
  * App\Support\Instituciones es una clase sin estado ni base de datos (como
  * Telefonos o Documento), así que se puede usar desde la vista para deducir el
  * número de un grado sin meter un modelo en el HTML.
- */
+*/
 $instituciones = $instituciones ?? [];
 
 /* Grados de procedencia, del catálogo `grado` y ordenados por su número, no
-   por id: en el catálogo el 2do grado es id 6 y el 3er es id 2. Se queda solo
-   con los que caen en el rango 1-6 de la primaria, que es el rango que valida
-   App\Support\Instituciones para el tipo TIPO_ESCUELA. Antes esta lista estaba
-   escrita a mano en el <select> y se le había quedado fuera el 6to grado. */
+ por id: en el catálogo el 2do grado es id 6 y el 3er es id 2. Se queda solo
+ con los que caen en el rango 1-6 de la primaria, que es el rango que valida
+ App\Support\Instituciones para el tipo TIPO_ESCUELA. Antes esta lista estaba
+ escrita a mano en el <select> y se le había quedado fuera el 6to grado.*/
 $gradosPrimaria = [];
 foreach ($gradosModal ?? [] as $grado) {
     $ordinal = \App\Support\Instituciones::ordinalGrado((string) ($grado['nombre'] ?? ''));
@@ -60,10 +60,10 @@ ksort($gradosPrimaria);
       <div class="col-12">
                 <label class="label-sigde" for="institucionProcedencia">Institución de procedencia *</label>
         <?php /* Solo se listan preescolares y escuelas (primarias): de ahí
-                 viene el estudiante. El botón de al lado da de alta una nueva
-                 en el modal anidado #modalNuevaInstitucionProcedencia, igual
-                 que en el formulario de empleados, y el tipo queda acotado a
-                 esas mismas etapas (App\Support\Instituciones). */ ?> ?>
+ viene el estudiante. El botón de al lado da de alta una nueva
+ en el modal anidado #modalNuevaInstitucionProcedencia, igual
+ que en el formulario de empleados, y el tipo queda acotado a
+ esas mismas etapas (App\Support\Instituciones).*/ ?>
         <div class="input-group">
           <select class="form-select" id="institucionProcedencia" name="id_institucion" required>
             <option value="" selected disabled>Seleccione la institución...</option>
@@ -81,10 +81,10 @@ ksort($gradosPrimaria);
       <div class="col-6">
         <label class="label-sigde" for="ultimoGradoCursado">Último grado cursado *</label>
         <?php /* "Educación Inicial" es la etapa anterior a la primaria: sirve
-                 para quien viene de un preescolar (TIPO_PREESCOLAR), que no
-                 tiene grados 1-6. Los grados 1-6 salen del catálogo `grado` y
-                 son los que el servidor compara con el grado de inscripción
-                 cuando la institución de procedencia es una escuela. */ ?>
+ para quien viene de un preescolar (TIPO_PREESCOLAR), que no
+ tiene grados 1-6. Los grados 1-6 salen del catálogo `grado` y
+ son los que el servidor compara con el grado de inscripción
+ cuando la institución de procedencia es una escuela.*/ ?>
         <select class="form-select" id="ultimoGradoCursado" name="ultimo_grado_cursado" required>
           <option value="" selected disabled>Seleccione grado...</option>
           <option value="Educación Inicial">Educación Inicial</option>

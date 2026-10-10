@@ -24,10 +24,13 @@ class LoginModel extends Model
                     u.intentos_fallidos, 
                     u.bloqueado_hasta,
                     u.password_provisional,
-                    u.estado AS usuario_estado
+                    u.estado AS usuario_estado,
+                    t.id_turno
                 FROM usuario u
                 INNER JOIN persona p ON u.id_persona = p.id_persona
                 INNER JOIN rol r ON u.id_rol = r.id_rol
+                LEFT JOIN empleado emp ON emp.id_persona = p.id_persona
+                LEFT JOIN turno t ON t.id_turno = emp.id_turno AND t.estado = 'ACTIVO'
                 WHERE {$condicion} 
                 AND u.estado != 'INACTIVO'
                 LIMIT 1";
@@ -40,40 +43,40 @@ class LoginModel extends Model
     // MÉTODOS DE AUTENTICACIÓN Y CONSULTA
 
     /**
-     * Obtiene los datos del usuario mediante su nombre de usuario (Login).
-     */
+ * Obtiene los datos del usuario mediante su nombre de usuario (Login).
+*/
     public function obtenerPorUsuario(string $usuario): array|false
     {
         return $this->consultarUsuarioBase("u.nombre_usuario = :usuario", ['usuario' => $usuario]);
     }
 
     /**
-     * Obtiene los datos del usuario mediante su ID (Sesiones y validaciones).
-     */
+ * Obtiene los datos del usuario mediante su ID (Sesiones y validaciones).
+*/
     public function obtenerPorId(int $id): array|false
     {
         return $this->consultarUsuarioBase("u.id_usuario = :id", ['id' => $id]);
     }
 
     /**
-     * Verifica bloqueo a partir del valor de bloqueado_hasta YA obtenido
-     * en obtenerPorUsuario(). Úsalo en authenticate(): evita un SELECT
-     * redundante porque ese dato ya viaja en el array del usuario.
-     *
-     * @param string|null $bloqueadoHasta Valor crudo de la columna
-     *        bloqueado_hasta (formato DATETIME de MySQL) o null.
-     */
+ * Verifica bloqueo a partir del valor de bloqueado_hasta YA obtenido
+ * en obtenerPorUsuario(). Úsalo en authenticate(): evita un SELECT
+ * redundante porque ese dato ya viaja en el array del usuario.
+ *
+ * @param string|null $bloqueadoHasta Valor crudo de la columna
+ * bloqueado_hasta (formato DATETIME de MySQL) o null.
+*/
     public function verificarBloqueo(?string $bloqueadoHasta): array
     {
         return $this->calcularEstadoBloqueo($bloqueadoHasta);
     }
 
     /**
-     * Verifica bloqueo consultando la BD por id de usuario. Úsalo cuando
-     * NO tienes el array fresco a mano, como al validar una sesión ya
-     * activa en el constructor de AuthController (ahí solo se cuenta con
-     * $_SESSION['usuario_id'], no con el resultado de obtenerPorUsuario).
-     */
+ * Verifica bloqueo consultando la BD por id de usuario. Úsalo cuando
+ * NO tienes el array fresco a mano, como al validar una sesión ya
+ * activa en el constructor de AuthController (ahí solo se cuenta con
+ * $_SESSION['usuario_id'], no con el resultado de obtenerPorUsuario).
+*/
     public function verificarBloqueoPorId(int $usuarioId): array
     {
         $sql = "SELECT bloqueado_hasta FROM usuario WHERE id_usuario = :id LIMIT 1";
@@ -85,10 +88,10 @@ class LoginModel extends Model
     }
 
     /**
-     * Lógica compartida de cálculo de bloqueo, usada tanto por
-     * verificarBloqueo() como por verificarBloqueoPorId() para no
-     * duplicar el cálculo de minutos restantes.
-     */
+ * Lógica compartida de cálculo de bloqueo, usada tanto por
+ * verificarBloqueo() como por verificarBloqueoPorId() para no
+ * duplicar el cálculo de minutos restantes.
+*/
     private function calcularEstadoBloqueo(?string $bloqueadoHasta): array
     {
         if (empty($bloqueadoHasta)) {
@@ -113,14 +116,14 @@ class LoginModel extends Model
     }
 
     /**
-     * Registra un intento fallido de login.
-     * Si llega a MAX_INTENTOS, bloquea por MINUTOS_BLOQUEO.
-     *
-     * NOTA: la columna `usuario.estado` en el esquema solo admite
-     * ENUM('ACTIVO','INACTIVO'), no existe el valor 'BLOQUEADO'.
-     * Por eso el bloqueo se controla únicamente con `bloqueado_hasta`
-     * (una fecha futura = usuario bloqueado), sin tocar `estado`.
-     */
+ * Registra un intento fallido de login.
+ * Si llega a MAX_INTENTOS, bloquea por MINUTOS_BLOQUEO.
+ *
+ * NOTA: la columna `usuario.estado` en el esquema solo admite
+ * ENUM('ACTIVO','INACTIVO'), no existe el valor 'BLOQUEADO'.
+ * Por eso el bloqueo se controla únicamente con `bloqueado_hasta`
+ * (una fecha futura = usuario bloqueado), sin tocar `estado`.
+*/
     public function registrarIntentoFallido(int $usuarioId, int $intentosActuales): int
     {
         $nuevosIntentos = $intentosActuales + 1;
@@ -143,10 +146,10 @@ class LoginModel extends Model
     }
 
     /**
-     * Reinicia los intentos fallidos y quita el bloqueo tras login exitoso.
-     * No modifica `estado`: el esquema solo admite ACTIVO/INACTIVO y el
-     * estado de bloqueo se representa exclusivamente vía `bloqueado_hasta`.
-     */
+ * Reinicia los intentos fallidos y quita el bloqueo tras login exitoso.
+ * No modifica `estado`: el esquema solo admite ACTIVO/INACTIVO y el
+ * estado de bloqueo se representa exclusivamente vía `bloqueado_hasta`.
+*/
     public function reiniciarIntentos(int $usuarioId): void
     {
         $sql = "UPDATE usuario 
@@ -161,10 +164,10 @@ class LoginModel extends Model
     // CAMBIO DE CONTRASEÑA
 
     /**
-     * Actualiza la contraseña del usuario y limpia el flag de
-     * contraseña provisional. Se usa tanto en el cambio obligatorio
-     * de primer ingreso como en un futuro restablecimiento.
-     */
+ * Actualiza la contraseña del usuario y limpia el flag de
+ * contraseña provisional. Se usa tanto en el cambio obligatorio
+ * de primer ingreso como en un futuro restablecimiento.
+*/
     public function actualizarPassword(int $usuarioId, string $nuevaPassword): bool
     {
         $hash = password_hash($nuevaPassword, PASSWORD_DEFAULT);

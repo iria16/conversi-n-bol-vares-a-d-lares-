@@ -1,0 +1,8 @@
+{
+  "name": "sidge/cere",
+  "type": "project",
+  "license": "ISC",
+  "require": {
+    "dompdf/dompdf": "^3.1"
+  }
+}

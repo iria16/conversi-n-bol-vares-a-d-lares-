@@ -4,17 +4,17 @@
  * Bitácora del Sistema — registro detallado de acciones y movimientos.
  *
  * Espera del controlador:
- * @var array  $stats       ['actividad_hoy','alertas','usuarios_activos']
- * @var array  $registros   cada uno: ['fecha','hora','usuario','usuario_login','iniciales',
- *                          'avatar_color','avatar_tipo','avatar_foto',
- *                          'accion' => 'login'|'create'|'update'|'delete'|'query'|'export',
- *                          'accion_label','modulo','ip']
- * @var array  $acciones    lista de acciones para el filtro [valor => etiqueta]
- * @var array  $filters     ['accion' => ..., 'q' => ...] (valores actuales del GET)
- * @var array  $paginacion  ['desde','hasta','total','pagina_actual','total_paginas']
+ * @var array $stats ['actividad_hoy','alertas','usuarios_activos']
+ * @var array $registros cada uno: ['fecha','hora','usuario','usuario_login','iniciales',
+ * 'avatar_color','avatar_tipo','avatar_foto',
+ * 'accion' => 'login'|'create'|'update'|'delete'|'query'|'export',
+ * 'accion_label','modulo','ip']
+ * @var array $acciones lista de acciones para el filtro [valor => etiqueta]
+ * @var array $filters ['accion' => ..., 'q' => ...] (valores actuales del GET)
+ * @var array $paginacion ['desde','hasta','total','pagina_actual','total_paginas']
  * @var string $fechaDesde
  * @var string $fechaHasta
- */
+*/
 
 $pageTitle  = 'Bitácora del Sistema';
 $currentNav = 'bitacora';
@@ -168,6 +168,11 @@ ob_start();
         <span class="action-badge action-badge--<?= htmlspecialchars($r['accion']) ?>">
           <?= htmlspecialchars($r['accion_label']) ?>
         </span>
+        <?php /* El detalle de la acción (a quién, a qué grado, con qué motivo): sin esto el
+ badge decía "Retiro" y no se distinguía una salida de otra.*/ ?>
+        <?php if (($r['detalle'] ?? '') !== '' && ($r['detalle'] ?? '') !== $r['accion_label']): ?>
+          <div class="text-support small"><?= htmlspecialchars($r['detalle']) ?></div>
+        <?php endif; ?>
       </td>
       <td class="text-support"><?= htmlspecialchars($r['modulo']) ?></td>
       <td class="text-support"><?= htmlspecialchars($r['ip']) ?></td>

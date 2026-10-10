@@ -10,19 +10,19 @@ use PDO;
 /**
  * Asignación docente (configuracion_academica/asignacionDocente), consumida por teacher-assignment.js.
  * Endpoints: teacherAssignment/index (GET, listado), asignar (POST, docente a sección) y retirar (POST, asignación vigente).
- */
+*/
 class TeacherAssignmentController extends CrudController
 {
     protected string $viewPath  = 'configuracion_academica/asignacionDocente';
     protected string $routeName = 'teacherAssignment';
 
     /**
-     * Devuelve el modelo con su tipo real, porque getModel() retorna ?object y el editor no resuelve sus métodos.
-     * Este envoltorio fija el tipo de createModel() y evita los subrayados rojos.
-     */
+ * Devuelve el modelo con su tipo real, porque getModel() retorna ?object y el editor no resuelve sus métodos.
+ * Este envoltorio fija el tipo de createModel() y evita los subrayados rojos.
+*/
     private function modelo(): TeacherAssignmentModel
     {
-        /** @var TeacherAssignmentModel $model */
+        /** @var TeacherAssignmentModel $model*/
         $model = $this->getModel();
 
         return $model;
@@ -36,9 +36,10 @@ class TeacherAssignmentController extends CrudController
     protected function getFiltersFromRequest(): array
     {
         return [
-            'anio'    => trim($_GET['anio'] ?? ''),
+            'anio'    => (string) ($this->modelo()->getActiveSchoolYearId() ?? 0),
             'grado'   => trim($_GET['grado'] ?? ''),
             'seccion' => trim($_GET['seccion'] ?? ''),
+            'turno'   => trim($_GET['turno'] ?? ''),
             'q'       => trim($_GET['q'] ?? ''),
         ];
     }
@@ -49,11 +50,11 @@ class TeacherAssignmentController extends CrudController
         return [
             'stats'          => $model->getStats(),
             'asignaciones'   => $items,
-            'anios'          => $model->getOptions('anio_escolar'),
+            'anioActivo'     => $model->getActiveSchoolYearName() ?? 'No hay un año escolar activo',
             'grados'         => $model->getOptions('grado'),
             'secciones'      => $model->getOptions('seccion'),
+            'turnos'         => $model->getOptions('turno'),
             'estructuras'    => $model->getStructures(),
-            'docentes'       => $model->getTeachers(),
             'tiposAsignacion' => $model->getTypes(),
         ];
     }
@@ -91,6 +92,43 @@ class TeacherAssignmentController extends CrudController
             $this->jsonResponse(false, null, $resultado['mensaje'], 422);
         }
         $this->jsonResponse(true, null, $resultado['mensaje']);
+    }
+
+    public function actualizar(): void
+    {
+        $idAsignacion = (int) ($_POST['id_asignacion'] ?? 0);
+        $docente = (int) ($_POST['id_docente'] ?? 0);
+        $tipo = (int) ($_POST['id_tipo_asignacion'] ?? 0);
+        $fechaInicio = trim($_POST['fecha_inicio'] ?? '');
+
+        if ($idAsignacion <= 0) {
+            $this->jsonResponse(false, null, 'La asignación que desea editar no es válida.', 422);
+        }
+        if ($docente <= 0 || $tipo <= 0 || $fechaInicio === '') {
+            $this->jsonResponse(false, null, 'Seleccione el docente, el tipo de asignación y la fecha de inicio.', 422);
+        }
+
+        $resultado = $this->modelo()->updateAssignment([
+            'id_asignacion' => $idAsignacion,
+            'id_docente' => $docente,
+            'id_tipo_asignacion' => $tipo,
+            'fecha_inicio' => $fechaInicio,
+        ]);
+
+        if (!$resultado['ok']) {
+            $this->jsonResponse(false, null, $resultado['mensaje'], 422);
+        }
+        $this->jsonResponse(true, null, $resultado['mensaje']);
+    }
+
+    public function getDocentesPorEstructura(): void
+    {
+        $estructura = (int) ($_GET['id'] ?? 0);
+        if ($estructura <= 0) {
+            $this->jsonResponse(false, null, 'Seleccione una sección académica válida.', 400);
+        }
+
+        $this->jsonResponse(true, $this->modelo()->getTeachersForStructure($estructura));
     }
 
     public function retirar(): void

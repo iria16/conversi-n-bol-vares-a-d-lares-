@@ -1,4 +1,5 @@
 node_modules/
+/vendor/
 .env
 .env.local
 .env.*.local
@@ -13,3 +14,9 @@ coverage/
 .vscode/
 .idea/
 
+# Metadatos de zona alternativa de NTFS que llegan al repo desde Windows
+*:Zone.Identifier
+
+# Fotografias de empleados y estudiantes que sube la aplicacion.
+# Son datos personales: nunca deben entrar al repositorio.
+public/uploads/

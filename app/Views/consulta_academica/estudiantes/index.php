@@ -9,15 +9,15 @@
  * components/data-panel.php.
  *
  * Espera del controlador:
- * - array $stats          ['total' => int, 'activos' => int, 'inactivos' => int]
- * - array $estudiantes    cada uno: ['id','nombre','iniciales','avatar_color',
- *                          'avatar_img' (opcional),'cedula_escolar','grado','seccion',
- *                          'estado' => 'activo'|'inactivo']
+ * - array $stats ['total' => int, 'activos' => int, 'inactivos' => int]
+ * - array $estudiantes cada uno: ['id','nombre','iniciales','avatar_color',
+ * 'avatar_img' (opcional),'cedula_escolar','grado','seccion',
+ * 'estado' => 'activo'|'inactivo']
  * - array $aniosEscolares lista de años escolares para el filtro
- * - array $grados         lista de grados para el filtro
- * - array $secciones      lista de secciones para el filtro
- * - array $filters        valores actuales de los filtros aplicados
- * - array $paginacion     ['desde','hasta','total','pagina_actual','total_paginas']
+ * - array $grados lista de grados para el filtro
+ * - array $secciones lista de secciones para el filtro
+ * - array $filters valores actuales de los filtros aplicados
+ * - array $paginacion ['desde','hasta','total','pagina_actual','total_paginas']
  *
  * @var array $stats
  * @var array $estudiantes
@@ -26,7 +26,7 @@
  * @var array $secciones
  * @var array $filters
  * @var array $paginacion
- */
+*/
 
 $pageTitle       = 'Consulta de Expedientes';
 $pageDescription = 'Gestión y búsqueda avanzada del alumnado de la institución.';
@@ -114,14 +114,19 @@ ob_start();
   ob_start();
   ?>
   <label for="filtroAnio" class="visually-hidden">Año escolar</label>
-  <select id="filtroAnio" name="anio" class="form-select" aria-label="Filtrar por año escolar">
-    <option value="">Año escolar (Todos)</option>
-    <?php foreach ($aniosEscolares as $anio): ?>
-      <option value="<?= htmlspecialchars($anio) ?>" <?= (string) ($filters['anio'] ?? '') === (string) $anio ? 'selected' : '' ?>>
-        <?= htmlspecialchars($anio) ?>
-      </option>
-    <?php endforeach; ?>
-  </select>
+  <div class="data-panel__year-filter">
+    <i class="bi bi-calendar3" aria-hidden="true"></i>
+    <select id="filtroAnio" name="anio" class="form-select" aria-label="Filtrar por año escolar">
+      <?php if (!$aniosEscolares): ?>
+        <option value="0" selected disabled>No hay años escolares para este turno</option>
+      <?php endif; ?>
+      <?php foreach ($aniosEscolares as $anio): ?>
+        <option value="<?= (int) $anio['id'] ?>" <?= (string) ($filters['anio'] ?? '') === (string) $anio['id'] ? 'selected' : '' ?>>
+          <?= htmlspecialchars($anio['nombre']) ?>
+        </option>
+      <?php endforeach; ?>
+    </select>
+  </div>
 
   <label for="filtroGrado" class="visually-hidden">Grado</label>
   <select id="filtroGrado" name="grado" class="form-select" aria-label="Filtrar por grado">
@@ -147,7 +152,9 @@ ob_start();
   <select id="filtroEstado" name="estado" class="form-select" aria-label="Filtrar por estado">
     <option value="">Estado (Cualquiera)</option>
     <option value="activo" <?= ($filters['estado'] ?? '') === 'activo' ? 'selected' : '' ?>>Activo</option>
-    <option value="inactivo" <?= ($filters['estado'] ?? '') === 'inactivo' ? 'selected' : '' ?>>Inactivo</option>
+    <option value="retirado" <?= ($filters['estado'] ?? '') === 'retirado' ? 'selected' : '' ?>>Retirado</option>
+    <option value="egresado" <?= ($filters['estado'] ?? '') === 'egresado' ? 'selected' : '' ?>>Egresado</option>
+    <option value="inactivo" <?= ($filters['estado'] ?? '') === 'inactivo' ? 'selected' : '' ?>>Inactivo (retirado o egresado)</option>
   </select>
   <?php
   $panelFilters           = ob_get_clean();
@@ -185,7 +192,14 @@ ob_start();
   // ---------- Data panel: tbody ----------
   ob_start();
   foreach ($estudiantes as $estudiante):
-    $esInactivo = ($estudiante['estado'] ?? '') === 'inactivo';
+    // El estado viene del ciclo del estudiante (activo, retirado o egresado), no de la
+    // persona: retirado y egresado son desenlaces distintos y se distinguen en la tabla.
+    $estadoCiclo   = (string) ($estudiante['estado'] ?? 'activo');
+    $esInactivo    = $estadoCiclo !== 'activo';
+    $estadoEtiqueta = ['activo' => 'Activo', 'retirado' => 'Retirado', 'egresado' => 'Egresado'][$estadoCiclo] ?? 'Activo';
+    // El color sale de los modificadores que ya existen en la hoja de estilos: retirado es
+    // una salida antes de culminar (rojo, como el retiro) y egresado una culminación (informativo).
+    $estadoColor   = ['activo' => 'active', 'retirado' => 'inactive', 'egresado' => 'info'][$estadoCiclo] ?? 'active';
   ?>
     <tr class="<?= $esInactivo ? 'is-muted' : '' ?>">
       <td>
@@ -208,16 +222,16 @@ ob_start();
       </td>
       <td class="text-center">
         <?php
-          $badgeLabel  = $esInactivo ? 'Inactivo' : 'Activo';
-          $badgeStatus = $esInactivo ? 'inactive' : 'active';
+          $badgeLabel  = $estadoEtiqueta;
+          $badgeStatus = $estadoColor;
           include __DIR__ . '/../../components/status-badge.php';
         ?>
       </td>
       <td class="text-center">
         <div class="data-panel__actions">
-          <a href="<?= BASE_URL ?>estudiantes/show/<?= (int) ($estudiante['id'] ?? 0) ?>"
-             class="action-btn action-btn--view" title="Ver expediente">
-            <i class="bi bi-eye"></i>
+          <a href="<?= BASE_URL ?>estudiantes/show/<?= (int) ($estudiante['id'] ?? 0) ?>?anio=<?= (int) ($filters['anio'] ?? 0) ?>"
+             class="btn btn-sm btn-outline-primary" title="Ver expediente">
+            <i class="bi bi-eye me-1" aria-hidden="true"></i>Ver expediente
           </a>
         </div>
       </td>
@@ -226,7 +240,17 @@ ob_start();
   <?php if (!$estudiantes): ?>
     <tr>
       <td colspan="5" class="text-center text-support py-4">
-        No se encontraron estudiantes con los filtros seleccionados.
+        <?php /* Sin asignaciones la tabla vacía es la respuesta correcta, no un fallo: el
+ docente solo ve lo que tiene asignado. Se dice explícitamente para que no
+ parezca que el listado no funciona.*/ ?>
+        <?php if (!empty($sinAsignaciones)): ?>
+          <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+          No tiene estructuras asignadas en el año escolar en curso, así que todavía no le
+          corresponden expedientes. Pida al coordinador o a la dirección que registren su
+          asignación en Configuración → Asignación Docente.
+        <?php else: ?>
+          No se encontraron estudiantes con los filtros seleccionados.
+        <?php endif; ?>
       </td>
     </tr>
   <?php endif; ?>
